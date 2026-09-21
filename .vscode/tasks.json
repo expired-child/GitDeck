@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "idea-git: build",
+      "type": "shell",
+      "command": "npm run build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "idea-git: compile",
+      "type": "npm",
+      "script": "compile",
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "idea-git: watch",
+      "type": "npm",
+      "script": "watch",
+      "isBackground": true,
+      "problemMatcher": ["$tsc-watch"]
+    },
+    {
+      "label": "idea-git: build webview",
+      "type": "npm",
+      "script": "build:webview",
+      "problemMatcher": []
+    }
+  ]
+}

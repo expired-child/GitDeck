@@ -1,0 +1,36 @@
+/* Theme tokens — always use VS Code CSS variables (document §49, §50).
+   Never hardcode colors like #2b2b2b so Light/Dark/High Contrast themes work. */
+
+:root {
+    --git-bg: var(--vscode-sideBar-background);
+    --git-panel-bg: var(--vscode-editorWidget-background);
+    --git-foreground: var(--vscode-foreground);
+    --git-description: var(--vscode-descriptionForeground);
+    --git-border: var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+    --git-hover: var(--vscode-list-hoverBackground);
+    --git-selected: var(--vscode-list-activeSelectionBackground);
+    --git-selected-fg: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+    --git-input-bg: var(--vscode-input-background);
+    --git-input-fg: var(--vscode-input-foreground);
+    --git-input-border: var(--vscode-input-border, var(--git-border));
+    --git-button-bg: var(--vscode-button-background);
+    --git-button-fg: var(--vscode-button-foreground);
+    --git-button-secondary-bg: var(--vscode-button-secondaryBackground, var(--vscode-badge-background));
+    --git-button-secondary-fg: var(--vscode-button-secondaryForeground, var(--vscode-badge-foreground));
+    --git-focus: var(--vscode-focusBorder);
+
+    --git-modified: var(--vscode-gitDecoration.modifiedResourceForeground, #e2c08d);
+    --git-added: var(--vscode-gitDecoration.addedResourceForeground, #81b88b);
+    --git-deleted: var(--vscode-gitDecoration.deletedResourceForeground, #c74e39);
+    --git-renamed: var(--vscode-gitDecoration.renamedResourceForeground, #a2b4d4);
+    --git-conflict: var(--vscode-gitDecoration.conflictingResourceForeground, #e4674b);
+    --git-untracked: var(--vscode-gitDecoration.untrackedResourceForeground, #73c991);
+
+    --git-graph-0: #4dabf7;
+    --git-graph-1: #51cf66;
+    --git-graph-2: #fcc419;
+    --git-graph-3: #ff922b;
+    --git-graph-4: #e599f7;
+    --git-graph-5: #66d9e8;
+    --git-graph-6: #f783ac;
+}
