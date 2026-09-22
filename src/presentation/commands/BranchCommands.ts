@@ -14,7 +14,10 @@ export function registerBranchCommands(
 ): void {
     commands['ideaGit.newBranch'] = runCommand(async () => {
         const repo = repositories.getActiveRepository();
-        if (!repo) { return; }
+        if (!repo) {
+            void vscode.window.showWarningMessage('IDEA Git: no active Git repository. Open a workspace with a Git repository first.');
+            return;
+        }
         const name = await vscode.window.showInputBox({
             prompt: 'New branch name',
             placeHolder: 'feature/login',
@@ -37,7 +40,10 @@ export function registerBranchCommands(
 
     commands['ideaGit.branchPicker'] = runCommand(async () => {
         const repo = repositories.getActiveRepository();
-        if (!repo) { return; }
+        if (!repo) {
+            void vscode.window.showWarningMessage('IDEA Git: no active Git repository. Open a workspace with a Git repository first.');
+            return;
+        }
         const list = await branches.list(repo.id);
         const items: (vscode.QuickPickItem & { branch?: BranchDto; action?: 'new' })[] = [];
         items.push({ label: 'Local', kind: vscode.QuickPickItemKind.Separator });

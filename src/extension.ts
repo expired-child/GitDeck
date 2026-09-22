@@ -13,6 +13,7 @@ import { DiffService } from './application/diff/DiffService';
 import { RemoteService } from './application/remote/RemoteService';
 import { ConflictService } from './application/conflict/ConflictService';
 import { StashService } from './application/stash/StashService';
+import { ChangelistService } from './application/changelist/ChangelistService';
 import { registerCommands } from './bootstrap/registerCommands';
 import { registerViews } from './bootstrap/registerViews';
 import { registerRemoteUpdates } from './bootstrap/registerRemoteUpdates';
@@ -41,6 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const remotes = new RemoteService(repositories, cli, logService, lock);
     const conflicts = new ConflictService(repositories, cli);
     const stashes = new StashService(repositories, cli);
+    const changelists = new ChangelistService(repositories, storage);
 
     const statusBar = new GitStatusBar(repositories);
     context.subscriptions.push(statusBar, repositories);
@@ -53,7 +55,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
     const { provider, notifier } = registerViews(context, {
         repositories, lock, status: statusService, commits, branches,
-        log: logService, history, diff, remotes, conflicts, stashes,
+        log: logService, history, diff, remotes, conflicts, stashes, changelists,
         storage, config
     });
 

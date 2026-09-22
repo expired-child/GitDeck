@@ -176,6 +176,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--git-fo
     border-radius: 2px;
     font-size: inherit;
     font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1;
 }
 .git-changes-toolbar button:hover { background: var(--git-hover); color: var(--git-foreground); }
 
@@ -484,6 +488,16 @@ button.git-group-header:hover { background: var(--git-hover); }
 .git-context-menu-item.danger { color: var(--git-deleted); }
 .git-context-menu-item.disabled { opacity: 0.45; cursor: default; }
 .git-context-menu-separator { border-top: 1px solid var(--git-border); margin: 3px 0; }
+.git-context-menu-has-submenu { position: relative; }
+.git-context-menu-with-sub { display: flex; justify-content: space-between; align-items: center; }
+.git-context-menu-with-sub .codicon { font-size: 12px; color: var(--git-description); }
+.git-context-submenu {
+    display: none;
+    position: absolute;
+    left: 100%;
+    top: -2px;
+}
+.git-context-menu-has-submenu:hover > .git-context-submenu { display: block; }
 
 /* ---------- modal ---------- */
 .git-modal-backdrop {
@@ -518,6 +532,24 @@ button.git-group-header:hover { background: var(--git-hover); }
     padding: 8px 12px;
     border-top: 1px solid var(--git-border);
 }
+
+/* ---------- input dialog ---------- */
+.git-input-dialog { width: 380px; }
+.git-modal-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 8px;
+    border: 1px solid var(--git-border);
+    border-radius: 3px;
+    background: var(--git-input-bg, var(--git-panel-bg));
+    color: inherit;
+    font-size: 12px;
+}
+.git-modal-input:focus { outline: 1px solid var(--git-focus-border, var(--git-button-bg)); outline-offset: -1px; }
+.git-secondary-button.danger { background: var(--git-deleted); color: #fff; border: none; }
+.git-empty-group { padding: 2px 12px 4px 28px; color: var(--git-description); font-size: 11px; font-style: italic; }
+.git-file-group { border: 1px solid transparent; border-radius: 3px; }
+.git-file-group.drag-over { border-color: var(--git-focus-border, var(--git-button-bg)); background: var(--git-hover); }
 
 /* ---------- toast ---------- */
 .git-toast {

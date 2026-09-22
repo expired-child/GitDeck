@@ -8,6 +8,7 @@ import { RemoteLogPanel } from './features/log/RemoteLogPanel';
 import { HistoryView } from './features/history/HistoryView';
 import { PushModal } from './features/commit/PushModal';
 import { ContextMenu } from './components/ContextMenu';
+import { InputDialog } from './components/InputDialog';
 import { EmptyState } from './components/EmptyState';
 import { ToolbarButton } from './components/Toolbar';
 import { request } from './bridge/vscode';
@@ -53,6 +54,7 @@ export default function App(): JSX.Element {
                     </button>
                 </EmptyState>
                 <ContextMenu />
+                <InputDialog />
                 <Toast />
             </div>
         );
@@ -97,6 +99,7 @@ export default function App(): JSX.Element {
             {!isCommit && <RemoteLogPanel />}
             <PushModal />
             <ContextMenu />
+            <InputDialog />
             <Toast />
         </div>
     );

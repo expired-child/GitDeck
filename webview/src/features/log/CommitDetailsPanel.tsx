@@ -73,12 +73,14 @@ function CommitDetails(): JSX.Element {
                 openMenu(e.clientX, e.clientY, [
                     { label: 'Checkout Revision', action: () => void store.checkoutRevision(selectedHash) },
                     { label: 'New Branch from Here...', action: () => {
-                        const name = window.prompt('New branch name');
-                        if (name) { void store.createBranch(name, selectedHash, true); }
+                        void store.showInputDialog({ title: 'New Branch from Here', placeholder: 'Branch name' }).then(name => {
+                            if (name?.trim()) { void store.createBranch(name, selectedHash, true); }
+                        });
                     } },
                     { label: 'New Tag...', action: () => {
-                        const name = window.prompt('Tag name');
-                        if (name) { void store.createTag(name, selectedHash); }
+                        void store.showInputDialog({ title: 'New Tag', placeholder: 'Tag name' }).then(name => {
+                            if (name?.trim()) { void store.createTag(name, selectedHash); }
+                        });
                     } },
                     { separator: true },
                     { label: 'Cherry-Pick', action: () => void store.cherryPick(selectedHash) },

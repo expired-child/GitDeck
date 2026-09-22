@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { ChangelistDto } from '../../shared/protocol';
 
 /**
  * Persistence on top of VS Code state storage:
@@ -8,6 +9,7 @@ import * as vscode from 'vscode';
 export class ExtensionStorage {
     private static readonly MESSAGE_HISTORY_KEY = 'ideaGit.commitMessageHistory';
     private static readonly ACTIVE_REPO_KEY = 'ideaGit.activeRepository';
+    private static readonly CHANGELISTS_KEY = 'ideaGit.changelists';
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -40,5 +42,20 @@ export class ExtensionStorage {
 
     async setWebviewState(state: unknown): Promise<void> {
         await this.context.workspaceState.update('ideaGit.webviewState', state);
+    }
+
+    getChangelists(rootPath: string): ChangelistDto[] {
+        const all = this.context.workspaceState.get<Record<string, ChangelistDto[]>>(ExtensionStorage.CHANGELISTS_KEY) ?? {};
+        return all[rootPath] ?? [];
+    }
+
+    async setChangelists(rootPath: string, changelists: ChangelistDto[]): Promise<void> {
+        const all = this.context.workspaceState.get<Record<string, ChangelistDto[]>>(ExtensionStorage.CHANGELISTS_KEY) ?? {};
+        if (changelists.length === 0) {
+            delete all[rootPath];
+        } else {
+            all[rootPath] = changelists;
+        }
+        await this.context.workspaceState.update(ExtensionStorage.CHANGELISTS_KEY, all);
     }
 }

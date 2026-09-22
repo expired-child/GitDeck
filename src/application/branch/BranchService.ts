@@ -1,5 +1,6 @@
 import { GitError, GitErrorCode } from '../../shared/GitError';
 import type { BranchDto } from '../../shared/protocol';
+import * as path from 'node:path';
 import { GitCli } from '../../infrastructure/git-cli/GitCli';
 import { GitCommandBuilder } from '../../infrastructure/git-cli/GitCommandBuilder';
 import { GitVersionDetector } from '../../infrastructure/git-cli/GitVersionDetector';
@@ -88,7 +89,17 @@ export class BranchService {
         const repo = this.repositories.getRequired(repositoryId);
         await this.validateBranchName(repo.rootPath, name);
         await this.lock.run(repo.id, async () => {
-            await repo.vscodeRepository.createBranch(name, checkout, base);
+            const baseArgs = base ? [base] : [];
+            if (checkout) {
+                const useSwitch = await this.versionDetector.supportsSwitch(repo.rootPath);
+                const cmd = new GitCommandBuilder(useSwitch ? 'switch' : 'checkout')
+                    .flag(useSwitch ? '-c' : '-b')
+                    .value(name, ...baseArgs);
+                await this.cli.out(repo.rootPath, cmd.build());
+            } else {
+                const cmd = new GitCommandBuilder('branch').value(name, ...baseArgs);
+                await this.cli.out(repo.rootPath, cmd.build());
+            }
         });
     }
 
@@ -141,6 +152,123 @@ export class BranchService {
             'log', '--oneline', '--no-decorate', `${current}..${branch}`
         ]);
         return out || 'No commits to compare.';
+    }
+
+    /** Resolves the upstream of a local branch, e.g. "origin/main"; null when unset. */
+    private async upstreamOf(root: string, branch: string): Promise<string | null> {
+        try {
+            const out = await this.cli.out(root, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${branch}@{upstream}`]);
+            const name = out.trim();
+            return name && !name.includes('@{upstream}') ? name : null;
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * IDEA-style "Update" (document §24): the current branch is pulled normally;
+     * a non-checked-out branch is fast-forwarded from its tracked remote branch
+     * via `git fetch <remote> <remoteBranch>:<branch>` without switching.
+     */
+    async update(repositoryId: string, branch: string): Promise<void> {
+        const repo = this.repositories.getRequired(repositoryId);
+        await this.lock.run(repo.id, async () => {
+            const isCurrent = repo.getHead().branch === branch;
+            if (isCurrent) {
+                await this.cli.out(repo.rootPath, ['pull'], { timeout: 120_000 });
+                await repo.vscodeRepository.status();
+                return;
+            }
+            const upstream = await this.upstreamOf(repo.rootPath, branch);
+            if (!upstream) {
+                throw new GitError(GitErrorCode.INVALID_INPUT, `Branch "${branch}" has no tracked remote branch to update from.`);
+            }
+            const slash = upstream.indexOf('/');
+            const remote = slash > 0 ? upstream.slice(0, slash) : upstream;
+            const remoteBranch = slash > 0 ? upstream.slice(slash + 1) : upstream;
+            // Fast-forward only: git refuses to overwrite diverged history.
+            await this.cli.out(repo.rootPath, ['fetch', remote, `${remoteBranch}:${branch}`], { timeout: 120_000 });
+            await repo.vscodeRepository.status();
+        });
+    }
+
+    /** IDEA-style "Push...": pushes the given branch, setting upstream on first push. */
+    async pushBranch(repositoryId: string, branch: string): Promise<void> {
+        const repo = this.repositories.getRequired(repositoryId);
+        const remotes = repo.getRemotes();
+        if (remotes.length === 0) {
+            throw new GitError(GitErrorCode.REMOTE_NOT_FOUND, 'No remote configured for this repository.');
+        }
+        await this.lock.run(repo.id, async () => {
+            const upstream = await this.upstreamOf(repo.rootPath, branch);
+            if (upstream) {
+                await this.cli.out(repo.rootPath, ['push'], { timeout: 120_000 });
+            } else {
+                const slash = branch.indexOf('/');
+                const remote = remotes.includes(branch.slice(0, slash)) ? branch.slice(0, slash) : remotes[0];
+                await this.cli.out(repo.rootPath, ['push', '-u', remote, branch], { timeout: 120_000 });
+            }
+            await repo.vscodeRepository.status();
+        });
+    }
+
+    /** IDEA "Show Diff with Working Tree": file-level changes from branch to the working tree. */
+    async diffWithWorkingTree(repositoryId: string, branch: string): Promise<string> {
+        const repo = this.repositories.getRequired(repositoryId);
+        return this.cli.out(repo.rootPath, ['diff', '--name-status', '--no-color', branch]);
+    }
+
+    /**
+     * IDEA "New Worktree from '<branch>'": creates a linked worktree at `dir`
+     * with the branch checked out. When the branch is already checked out
+     * (here or in another worktree), a uniquely named companion branch is
+     * created instead. Returns the absolute worktree path.
+     */
+    async addWorktree(repositoryId: string, branch: string, dir: string): Promise<string> {
+        const repo = this.repositories.getRequired(repositoryId);
+        const trimmed = dir.trim().replace(/^["']|["']$/g, '');
+        if (!trimmed) {
+            throw new GitError(GitErrorCode.INVALID_INPUT, 'Worktree directory must not be empty.');
+        }
+        await this.validateBranchName(repo.rootPath, branch);
+        const abs = path.isAbsolute(trimmed) ? trimmed : path.resolve(path.dirname(repo.rootPath), trimmed);
+        return this.lock.run(repo.id, async () => {
+            try {
+                await this.cli.out(repo.rootPath, ['worktree', 'add', abs, branch]);
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                if (!/already (checked out|used by worktree)/i.test(msg)) {
+                    throw e;
+                }
+                const name = await this.uniqueWorktreeBranchName(repo.rootPath, branch);
+                await this.cli.out(repo.rootPath, ['worktree', 'add', '-b', name, abs, branch]);
+            }
+            return abs;
+        });
+    }
+
+    private async uniqueWorktreeBranchName(root: string, branch: string): Promise<string> {
+        const out = await this.cli.out(root, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
+        const existing = new Set(out.split('\n').map(l => l.trim()));
+        const base = `${branch}-worktree`;
+        for (let i = 0; ; i++) {
+            const candidate = i === 0 ? base : `${base}-${i + 1}`;
+            if (!existing.has(candidate)) {
+                return candidate;
+            }
+        }
+    }
+
+    /** Points a local branch at a remote-tracking branch (e.g. "origin/main"). */
+    async setTracking(repositoryId: string, branch: string, upstream: string): Promise<void> {
+        const repo = this.repositories.getRequired(repositoryId);
+        const target = upstream.trim();
+        if (!target || target.startsWith('-') || target.includes(' ')) {
+            throw new GitError(GitErrorCode.INVALID_INPUT, `Invalid upstream branch: "${upstream}"`);
+        }
+        await this.lock.run(repo.id, async () => {
+            await this.cli.out(repo.rootPath, new GitCommandBuilder('branch').flag(`--set-upstream-to=${target}`).value(branch).build());
+        });
     }
 
     async setUpstream(repositoryId: string, branch: string, remote: string): Promise<void> {

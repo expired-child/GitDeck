@@ -97,6 +97,37 @@ export class CommitService {
             await this.cli.out(repo.rootPath, ['reset', '--', ...paths]);
         });
     }
+
+    /**
+     * Local changes as a patch (staged + unstaged, relative to HEAD).
+     * Empty `paths` produces a patch for the whole working tree.
+     */
+    async getPatch(repositoryId: string, paths: string[]): Promise<string> {
+        const repo = this.repositories.getRequired(repositoryId);
+        return this.lock.run(repo.id, async () => {
+            const args = ['diff', 'HEAD', '--binary', '--no-color'];
+            if (paths.length > 0) {
+                args.push('--', ...paths);
+            }
+            return this.cli.out(repo.rootPath, args);
+        });
+    }
+
+    /**
+     * IDEA-style "Shelve Changes": stashes the given files (untracked included)
+     * so they can be restored later via "Apply" on the stash.
+     */
+    async shelve(repositoryId: string, paths: string[], message?: string): Promise<void> {
+        const repo = this.repositories.getRequired(repositoryId);
+        await this.lock.run(repo.id, async () => {
+            const args = ['stash', 'push', '-u', '-m', message?.trim() || 'Shelved changes'];
+            if (paths.length > 0) {
+                args.push('--', ...paths);
+            }
+            await this.cli.out(repo.rootPath, args, { timeout: 60_000 });
+            await repo.vscodeRepository.status();
+        });
+    }
 }
 
 /** Re-exported builder helper for other services. */

@@ -137,6 +137,12 @@ export interface StashDto {
     date: string;
 }
 
+/** User-defined changelist (IDEA-style custom file group), persisted per repository. */
+export interface ChangelistDto {
+    name: string;
+    paths: string[];
+}
+
 export interface FileHistoryRequestDto {
     repositoryId: string;
     path: string;
@@ -193,6 +199,11 @@ export type WebviewRequest =
     | { type: 'git.branch.merge'; requestId: string; payload: { repositoryId: string; branch: string } }
     | { type: 'git.branch.rebase'; requestId: string; payload: { repositoryId: string; branch: string } }
     | { type: 'git.branch.compare'; requestId: string; payload: { repositoryId: string; branch: string } }
+    | { type: 'git.branch.update'; requestId: string; payload: { repositoryId: string; branch: string } }
+    | { type: 'git.branch.push'; requestId: string; payload: { repositoryId: string; branch: string } }
+    | { type: 'git.branch.diffWorktree'; requestId: string; payload: { repositoryId: string; branch: string } }
+    | { type: 'git.branch.worktree.add'; requestId: string; payload: { repositoryId: string; branch: string; path: string } }
+    | { type: 'git.branch.setUpstream'; requestId: string; payload: { repositoryId: string; branch: string; upstream?: string } }
     | { type: 'git.diff.show'; requestId: string; payload: DiffTargetDto }
     | { type: 'git.file.add'; requestId: string; payload: { repositoryId: string; paths: string[] } }
     | { type: 'git.file.unstage'; requestId: string; payload: { repositoryId: string; paths: string[] } }
@@ -208,6 +219,15 @@ export type WebviewRequest =
     | { type: 'git.stash.push'; requestId: string; payload: { repositoryId: string; message?: string } }
     | { type: 'git.stash.apply'; requestId: string; payload: { repositoryId: string; index: number; pop: boolean } }
     | { type: 'git.stash.drop'; requestId: string; payload: { repositoryId: string; index: number } }
+    | { type: 'git.changelist.list'; requestId: string; payload: { repositoryId: string } }
+    | { type: 'git.changelist.unassign'; requestId: string; payload: { repositoryId: string; paths: string[] } }
+    | { type: 'git.patch.get'; requestId: string; payload: { repositoryId: string; paths?: string[] } }
+    | { type: 'git.patch.save'; requestId: string; payload: { repositoryId: string; paths?: string[] } }
+    | { type: 'git.changes.shelve'; requestId: string; payload: { repositoryId: string; paths?: string[]; message?: string } }
+    | { type: 'git.changelist.create'; requestId: string; payload: { repositoryId: string; name: string } }
+    | { type: 'git.changelist.delete'; requestId: string; payload: { repositoryId: string; name: string } }
+    | { type: 'git.changelist.rename'; requestId: string; payload: { repositoryId: string; oldName: string; newName: string } }
+    | { type: 'git.changelist.moveFiles'; requestId: string; payload: { repositoryId: string; name: string; paths: string[] } }
     | { type: 'git.operation.continue'; requestId: string; payload: { repositoryId: string } }
     | { type: 'git.operation.skip'; requestId: string; payload: { repositoryId: string } }
     | { type: 'git.operation.abort'; requestId: string; payload: { repositoryId: string } }

@@ -7,35 +7,66 @@ import type { BranchDto } from '../../bridge/protocol';
 
 function branchContextMenu(branch: BranchDto): MenuItem[] {
     const store = useGitStore.getState();
+    const ask = store.showInputDialog;
     const items: MenuItem[] = [];
-    if (branch.type !== 'tag') {
+    if (branch.type === 'local') {
         items.push({ label: 'Checkout', disabled: branch.current, action: () => void store.checkoutBranch(branch.name) });
-        items.push({ label: 'New Branch from Selected...', action: () => {
-            const name = window.prompt('New branch name based on ' + branch.name);
-            if (name) { void store.createBranch(name, branch.name, true); }
+        items.push({ label: `New Branch from '${branch.name}'...`, action: () => {
+            void ask({ title: `New Branch from '${branch.name}'`, placeholder: 'Branch name' }).then(name => {
+                if (name?.trim()) { void store.createBranch(name, branch.name, true); }
+            });
         } });
+        items.push({ label: 'Show Diff with Working Tree', action: () => void store.diffBranchWithWorktree(branch.name) });
+        items.push({ label: `New Worktree from '${branch.name}'...`, action: () => {
+            const repo = store.repositories.find(r => r.id === store.activeRepoId);
+            const repoName = repo?.rootPath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? 'worktree';
+            const suggestion = `${repoName}-${branch.name.replace(/[^\w.-]+/g, '-')}`;
+            void ask({ title: `New Worktree from '${branch.name}'`, placeholder: 'Worktree directory', initialValue: suggestion }).then(dir => {
+                if (dir?.trim()) { void store.addWorktree(branch.name, dir); }
+            });
+        } });
+        items.push({ separator: true });
+        items.push({ label: 'Update', action: () => void store.updateBranch(branch.name) });
+        items.push({ label: 'Push...', action: () => void store.pushSelectedBranch(branch.name) });
+        const upstream = branch.upstream ?? undefined;
+        items.push(upstream
+            ? { label: `Tracked Branch '${upstream}'`, items: [
+                { label: 'Compare with Local', action: () => void store.compareBranch(upstream) },
+                { label: 'Update from Upstream', action: () => void store.updateBranch(branch.name) }
+            ] }
+            : { label: `Set Upstream to 'origin/${branch.name}'`, action: () => void store.setUpstream(branch.name) });
         items.push({ separator: true });
         items.push({ label: 'Merge into Current', disabled: branch.current, action: () => void store.mergeBranch(branch.name) });
         items.push({ label: 'Rebase Current onto Selected', disabled: branch.current, action: () => void store.rebaseBranch(branch.name) });
         items.push({ label: 'Compare with Current', action: () => void store.compareBranch(branch.name) });
         items.push({ separator: true });
-    }
-    if (branch.type === 'local') {
-        items.push({ label: 'Rename', action: () => {
-            const name = window.prompt('Rename branch', branch.name);
-            if (name && name !== branch.name) { void store.renameBranch(branch.name, name); }
+        items.push({ label: 'Rename...', action: () => {
+            void ask({ title: 'Rename Branch', initialValue: branch.name }).then(name => {
+                if (name?.trim() && name !== branch.name) { void store.renameBranch(branch.name, name); }
+            });
         } });
         items.push({ label: 'Delete', danger: true, disabled: branch.current, action: () => {
-            if (window.confirm(`Delete branch "${branch.name}"?`)) {
-                void store.deleteBranch(branch.name, false);
-            }
+            void ask({ title: `Delete branch "${branch.name}"?`, confirmOnly: true, confirmLabel: 'Delete', danger: true }).then(ok => {
+                if (ok !== null) { void store.deleteBranch(branch.name, false); }
+            });
         } });
     } else if (branch.type === 'remote') {
-        items.push({ label: 'Delete Remote Branch', danger: true, action: () => {
-            if (window.confirm(`Delete remote branch "${branch.name}"?`)) {
-                void store.deleteBranch(branch.name, true);
-            }
+        items.push({ label: 'Checkout', action: () => void store.checkoutBranch(branch.name) });
+        items.push({ label: `New Branch from '${branch.name}'...`, action: () => {
+            void ask({ title: `New Branch from '${branch.name}'`, placeholder: 'Branch name' }).then(name => {
+                if (name?.trim()) { void store.createBranch(name, branch.name, true); }
+            });
         } });
+        items.push({ separator: true });
+        items.push({ label: 'Compare with Current', action: () => void store.compareBranch(branch.name) });
+        items.push({ separator: true });
+        items.push({ label: 'Delete Remote Branch', danger: true, action: () => {
+            void ask({ title: `Delete remote branch "${branch.name}"?`, confirmOnly: true, confirmLabel: 'Delete', danger: true }).then(ok => {
+                if (ok !== null) { void store.deleteBranch(branch.name, true); }
+            });
+        } });
+    } else {
+        items.push({ label: 'Compare with Current', action: () => void store.compareBranch(branch.name) });
     }
     items.push({ separator: true });
     items.push({ label: 'Copy Branch Name', action: () => void navigator.clipboard.writeText(branch.name) });

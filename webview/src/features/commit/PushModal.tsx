@@ -68,9 +68,14 @@ export function PushModal(): JSX.Element | null {
                         className="git-secondary-button"
                         disabled={preview.commits.length === 0}
                         onClick={() => {
-                            if (window.confirm('Force push using --force-with-lease?')) {
-                                void push(true);
-                            }
+                            void useGitStore.getState().showInputDialog({
+                                title: 'Force push using --force-with-lease?',
+                                confirmOnly: true,
+                                confirmLabel: 'Force Push',
+                                danger: true
+                            }).then(ok => {
+                                if (ok !== null) { void push(true); }
+                            });
                         }}
                     >
                         Force Push

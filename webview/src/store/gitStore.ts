@@ -5,7 +5,7 @@ import {
 import type {
     RepositoryDto, RepositoryStatusDto, CommitDto, CommitFileDto, CommitDetailsDto,
     BranchDto, GitLogFilterDto, PushPreviewDto, HistoryEntryDto, StashDto,
-    GitLogRequestDto, DiffTargetDto, WebviewPersistedState, RemoteLogDto
+    GitLogRequestDto, DiffTargetDto, WebviewPersistedState, RemoteLogDto, ChangelistDto
 } from '../bridge/protocol';
 
 export type TabId = 'changes' | 'log' | 'history';
@@ -16,12 +16,29 @@ export interface MenuItem {
     action?: () => void;
     danger?: boolean;
     disabled?: boolean;
+    /** Renders a hover submenu instead of a clickable action. */
+    items?: MenuItem[];
 }
 
 export interface ContextMenuState {
     x: number;
     y: number;
     items: MenuItem[];
+}
+
+/**
+ * In-webview replacement for window.prompt/window.confirm, which are silently
+ * blocked inside the VS Code webview iframe.
+ */
+export interface InputDialogState {
+    title: string;
+    placeholder?: string;
+    initialValue?: string;
+    confirmLabel?: string;
+    /** Hide the text input and render a plain OK/Cancel confirmation. */
+    confirmOnly?: boolean;
+    danger?: boolean;
+    resolve: (value: string | null) => void;
 }
 
 interface GitStore {
@@ -54,9 +71,11 @@ interface GitStore {
     historyEntries: HistoryEntryDto[];
     historyLoading: boolean;
     stashes: StashDto[];
+    changelists: ChangelistDto[];
     // ui
     toast?: { kind: 'error' | 'info'; message: string };
     menu: ContextMenuState | null;
+    dialog: InputDialogState | null;
     pushPreview?: PushPreviewDto;
     splitSizes: number[];
     collapsedGroups: Record<string, boolean>;
@@ -69,6 +88,8 @@ interface GitStore {
     showToast(kind: 'error' | 'info', message: string): void;
     openMenu(x: number, y: number, items: MenuItem[]): void;
     closeMenu(): void;
+    showInputDialog(options: Omit<InputDialogState, 'resolve'>): Promise<string | null>;
+    resolveDialog(value: string | null): void;
 
     selectRepository(id: string): Promise<void>;
     refreshStatus(): Promise<void>;
@@ -119,6 +140,22 @@ interface GitStore {
     applyStash(index: number, pop: boolean): Promise<void>;
     dropStash(index: number): Promise<void>;
 
+    loadChangelists(): Promise<void>;
+    createChangelist(name: string, movePaths?: string[]): Promise<void>;
+    deleteChangelist(name: string): Promise<void>;
+    renameChangelist(oldName: string, newName: string): Promise<void>;
+    moveToChangelist(name: string, paths: string[]): Promise<void>;
+
+    updateBranch(branch: string): Promise<void>;
+    pushSelectedBranch(branch: string): Promise<void>;
+    diffBranchWithWorktree(branch: string): Promise<void>;
+    addWorktree(branch: string, dir: string): Promise<void>;
+    setUpstream(branch: string, upstream?: string): Promise<void>;
+
+    createPatch(paths: string[], mode: 'copy' | 'save'): Promise<void>;
+    shelveChanges(paths: string[], message?: string): Promise<void>;
+    unassignFromChangelist(paths: string[]): Promise<void>;
+
     operationContinue(): Promise<void>;
     operationSkip(): Promise<void>;
     operationAbort(): Promise<void>;
@@ -151,7 +188,8 @@ export const useGitStore = create<GitStore>((set, get) => {
             set({ status: undefined, checked: {}, commits: [], branches: [], remoteLog: undefined,
                 selectedHash: undefined, selectedFiles: [], selectedDetails: undefined,
                 historyEntries: [], historyPath: '', filter: {}, logLoading: false,
-                statusLoading: false, hasMore: false, logPage: 0, pushPreview: undefined });
+                statusLoading: false, hasMore: false, logPage: 0, pushPreview: undefined,
+                changelists: [] });
         }
         set({ repositories, activeRepoId });
     };
@@ -168,7 +206,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     };
 
     const refreshAll = async (): Promise<void> => {
-        await Promise.all([get().refreshStatus(), get().loadBranches(), get().loadCommits(true)]);
+        await Promise.all([get().refreshStatus(), get().loadBranches(), get().loadCommits(true), get().loadChangelists()]);
     };
 
     return {
@@ -196,8 +234,10 @@ export const useGitStore = create<GitStore>((set, get) => {
         historyEntries: [],
         historyLoading: false,
         stashes: [],
+        changelists: [],
         toast: undefined,
         menu: null,
+        dialog: null,
         splitSizes: [18, 54, 28],
         collapsedGroups: {},
         showGraph: true,
@@ -302,11 +342,32 @@ export const useGitStore = create<GitStore>((set, get) => {
         },
 
         openMenu(x, y, items): void {
-            set({ menu: { x, y, items } });
+            // Defer past the triggering event: the ContextMenu registers a
+            // window-level contextmenu/click listener that closes the menu,
+            // and that listener would otherwise fire during the same event
+            // bubbling and instantly dismiss the freshly opened menu.
+            setTimeout(() => {
+                set({ menu: { x, y, items } });
+            }, 0);
         },
 
         closeMenu(): void {
             set({ menu: null });
+        },
+
+        showInputDialog(options): Promise<string | null> {
+            return new Promise(resolve => {
+                // Cancel any dialog that is still pending.
+                get().dialog?.resolve(null);
+                set({ dialog: { ...options, resolve } });
+            });
+        },
+
+        resolveDialog(value): void {
+            const dialog = get().dialog;
+            if (!dialog) { return; }
+            set({ dialog: null });
+            dialog.resolve(value);
         },
 
         async selectRepository(id): Promise<void> {
@@ -536,6 +597,33 @@ export const useGitStore = create<GitStore>((set, get) => {
             await withRepo({ branch }, 'git.branch.compare').catch(handleError);
         },
 
+        async updateBranch(branch): Promise<void> {
+            await withRepo({ branch }, 'git.branch.update').catch(handleError);
+            set({ toast: { kind: 'info', message: `Branch "${branch}" updated` } });
+            await refreshAll();
+        },
+
+        async pushSelectedBranch(branch): Promise<void> {
+            await withRepo({ branch }, 'git.branch.push').catch(handleError);
+            set({ toast: { kind: 'info', message: `Branch "${branch}" pushed` } });
+            await get().loadBranches();
+        },
+
+        async diffBranchWithWorktree(branch): Promise<void> {
+            await withRepo({ branch }, 'git.branch.diffWorktree').catch(handleError);
+        },
+
+        async addWorktree(branch, dir): Promise<void> {
+            await withRepo({ branch, path: dir }, 'git.branch.worktree.add').catch(handleError);
+            await get().loadBranches();
+        },
+
+        async setUpstream(branch, upstream): Promise<void> {
+            await withRepo({ branch, upstream }, 'git.branch.setUpstream').catch(handleError);
+            set({ toast: { kind: 'info', message: `Branch "${branch}" now tracks "${upstream ?? `origin/${branch}`}"` } });
+            await get().loadBranches();
+        },
+
         async pushBranch(branch): Promise<void> {
             // Push the current branch with the standard flow.
             void branch;
@@ -635,6 +723,100 @@ export const useGitStore = create<GitStore>((set, get) => {
         async dropStash(index): Promise<void> {
             await withRepo({ index }, 'git.stash.drop').catch(handleError);
             await get().loadStashes();
+        },
+
+        async loadChangelists(): Promise<void> {
+            const { activeRepoId } = get();
+            if (!activeRepoId) { return; }
+            try {
+                const changelists = await request<ChangelistDto[]>('git.changelist.list', { repositoryId: activeRepoId });
+                if (get().activeRepoId === activeRepoId) { set({ changelists }); }
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async createChangelist(name, movePaths): Promise<void> {
+            const trimmed = name.trim();
+            if (!trimmed) { return; }
+            try {
+                const changelists = await withRepo({ name: trimmed }, 'git.changelist.create') as ChangelistDto[];
+                set({ changelists, toast: { kind: 'info', message: `Changelist "${trimmed}" created` } });
+                if (movePaths?.length) {
+                    await get().moveToChangelist(trimmed, movePaths);
+                }
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async deleteChangelist(name): Promise<void> {
+            try {
+                const changelists = await withRepo({ name }, 'git.changelist.delete') as ChangelistDto[];
+                set({ changelists });
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async renameChangelist(oldName, newName): Promise<void> {
+            const trimmed = newName.trim();
+            if (!trimmed || trimmed === oldName) { return; }
+            try {
+                const changelists = await withRepo({ oldName, newName: trimmed }, 'git.changelist.rename') as ChangelistDto[];
+                set({ changelists });
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async moveToChangelist(name, paths): Promise<void> {
+            try {
+                const changelists = await withRepo({ name, paths }, 'git.changelist.moveFiles') as ChangelistDto[];
+                set({ changelists });
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async createPatch(paths, mode): Promise<void> {
+            const { activeRepoId } = get();
+            if (!activeRepoId) { return; }
+            try {
+                if (mode === 'save') {
+                    await request('git.patch.save', { repositoryId: activeRepoId, paths });
+                    return;
+                }
+                const patch = await request<string>('git.patch.get', { repositoryId: activeRepoId, paths });
+                if (!patch.trim()) {
+                    set({ toast: { kind: 'info', message: 'No local changes to create a patch from.' } });
+                    return;
+                }
+                copyToClipboard(patch);
+                set({ toast: { kind: 'info', message: 'Patch copied to clipboard' } });
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async shelveChanges(paths, message): Promise<void> {
+            try {
+                await withRepo({ paths, message }, 'git.changes.shelve');
+                set({ toast: { kind: 'info', message: 'Changes shelved' } });
+                await refreshAll();
+                await get().loadStashes();
+            } catch (e) {
+                handleError(e);
+            }
+        },
+
+        async unassignFromChangelist(paths): Promise<void> {
+            try {
+                const changelists = await withRepo({ paths }, 'git.changelist.unassign') as ChangelistDto[];
+                set({ changelists });
+            } catch (e) {
+                handleError(e);
+            }
         },
 
         async operationContinue(): Promise<void> {

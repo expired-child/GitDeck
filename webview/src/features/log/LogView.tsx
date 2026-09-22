@@ -17,12 +17,14 @@ function commitMenu(commit: CommitDto): Parameters<ReturnType<typeof useGitStore
         { separator: true },
         { label: 'Checkout Revision', action: () => void store.checkoutRevision(commit.hash) },
         { label: 'New Branch from Here...', action: () => {
-            const name = window.prompt('New branch name');
-            if (name) { void store.createBranch(name, commit.hash, true); }
+            void store.showInputDialog({ title: 'New Branch from Here', placeholder: 'Branch name' }).then(name => {
+                if (name?.trim()) { void store.createBranch(name, commit.hash, true); }
+            });
         } },
         { label: 'New Tag...', action: () => {
-            const name = window.prompt('Tag name');
-            if (name) { void store.createTag(name, commit.hash); }
+            void store.showInputDialog({ title: 'New Tag', placeholder: 'Tag name' }).then(name => {
+                if (name?.trim()) { void store.createTag(name, commit.hash); }
+            });
         } },
         { separator: true },
         { label: 'Cherry-Pick', action: () => void store.cherryPick(commit.hash) },

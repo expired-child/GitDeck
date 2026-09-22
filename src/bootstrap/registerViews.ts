@@ -18,6 +18,7 @@ import type { DiffService } from '../application/diff/DiffService';
 import type { RemoteService } from '../application/remote/RemoteService';
 import type { ConflictService } from '../application/conflict/ConflictService';
 import type { StashService } from '../application/stash/StashService';
+import type { ChangelistService } from '../application/changelist/ChangelistService';
 import type { GitOperationLock } from '../application/repository/RepositoryService';
 import type { ExtensionStorage } from '../infrastructure/persistence/ExtensionStorage';
 
@@ -33,6 +34,7 @@ export interface ViewServices {
     remotes: RemoteService;
     conflicts: ConflictService;
     stashes: StashService;
+    changelists: ChangelistService;
     storage: ExtensionStorage;
     config(): { discardConfirm: boolean };
 }
@@ -158,6 +160,43 @@ export function registerViews(
         const doc = await vscode.workspace.openTextDocument({ content: `Commits in "${branch}" not in current branch:\n\n${text}`, language: 'markdown' });
         await vscode.window.showTextDocument(doc, { preview: true });
     });
+    router.register('git.branch.update', async p => {
+        const { repositoryId, branch } = p as { repositoryId: string; branch: string };
+        await services.branches.update(repositoryId, branch);
+    });
+    router.register('git.branch.push', async p => {
+        const { repositoryId, branch } = p as { repositoryId: string; branch: string };
+        await services.branches.pushBranch(repositoryId, branch);
+    });
+    router.register('git.branch.diffWorktree', async p => {
+        const { repositoryId, branch } = p as { repositoryId: string; branch: string };
+        const text = await services.branches.diffWithWorkingTree(repositoryId, branch);
+        const doc = await vscode.workspace.openTextDocument({
+            content: `Working tree changes relative to "${branch}":\n\n${text || 'No differences.'}`,
+            language: 'markdown'
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+    });
+    router.register('git.branch.worktree.add', async p => {
+        const { repositoryId, branch, path: dir } = p as { repositoryId: string; branch: string; path: string };
+        const worktreePath = await services.branches.addWorktree(repositoryId, branch, dir);
+        const choice = await vscode.window.showInformationMessage(
+            `Worktree created at "${worktreePath}".`,
+            'Open in New Window', 'Add to Workspace'
+        );
+        const uri = vscode.Uri.file(worktreePath);
+        if (choice === 'Open in New Window') {
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true });
+        } else if (choice === 'Add to Workspace') {
+            await vscode.workspace.updateWorkspaceFolders(
+                vscode.workspace.workspaceFolders?.length ?? 0, 0, { uri }
+            );
+        }
+    });
+    router.register('git.branch.setUpstream', async p => {
+        const { repositoryId, branch, upstream } = p as { repositoryId: string; branch: string; upstream?: string };
+        await services.branches.setTracking(repositoryId, branch, upstream ?? `origin/${branch}`);
+    });
     router.register('git.diff.show', async p => diffController.show(p as DiffTargetDto));
     router.register('git.file.add', async p => {
         const { repositoryId, paths } = p as { repositoryId: string; paths: string[] };
@@ -215,6 +254,54 @@ export function registerViews(
     router.register('git.stash.drop', async p => {
         const { repositoryId, index } = p as { repositoryId: string; index: number };
         await services.stashes.drop(repositoryId, index);
+    });
+    router.register('git.changelist.list', async p => {
+        const { repositoryId } = p as { repositoryId: string };
+        return services.changelists.list(repositoryId);
+    });
+    router.register('git.patch.get', async p => {
+        const { repositoryId, paths } = p as { repositoryId: string; paths?: string[] };
+        return services.commits.getPatch(repositoryId, paths ?? []);
+    });
+    router.register('git.patch.save', async p => {
+        const { repositoryId, paths } = p as { repositoryId: string; paths?: string[] };
+        const patch = await services.commits.getPatch(repositoryId, paths ?? []);
+        if (!patch.trim()) {
+            throw new Error('No local changes to create a patch from.');
+        }
+        const repo = services.repositories.getRequired(repositoryId);
+        const target = await vscode.window.showSaveDialog({
+            title: 'Create Patch from Local Changes',
+            defaultUri: vscode.Uri.file(path.join(repo.rootPath, 'changes.patch')),
+            filters: { 'Patch Files': ['patch', 'diff'], 'All Files': ['*'] }
+        });
+        if (!target) { return; }
+        await vscode.workspace.fs.writeFile(target, Buffer.from(patch, 'utf8'));
+        void vscode.window.showInformationMessage(`Patch saved to ${target.fsPath}`);
+    });
+    router.register('git.changes.shelve', async p => {
+        const { repositoryId, paths, message } = p as { repositoryId: string; paths?: string[]; message?: string };
+        await services.commits.shelve(repositoryId, paths ?? [], message);
+    });
+    router.register('git.changelist.create', async p => {
+        const { repositoryId, name } = p as { repositoryId: string; name: string };
+        return services.changelists.create(repositoryId, name);
+    });
+    router.register('git.changelist.delete', async p => {
+        const { repositoryId, name } = p as { repositoryId: string; name: string };
+        return services.changelists.remove(repositoryId, name);
+    });
+    router.register('git.changelist.rename', async p => {
+        const { repositoryId, oldName, newName } = p as { repositoryId: string; oldName: string; newName: string };
+        return services.changelists.rename(repositoryId, oldName, newName);
+    });
+    router.register('git.changelist.moveFiles', async p => {
+        const { repositoryId, name, paths } = p as { repositoryId: string; name: string; paths: string[] };
+        return services.changelists.moveFiles(repositoryId, name, paths);
+    });
+    router.register('git.changelist.unassign', async p => {
+        const { repositoryId, paths } = p as { repositoryId: string; paths: string[] };
+        return services.changelists.removePaths(repositoryId, paths);
     });
     router.register('git.operation.continue', async p => {
         const { repositoryId } = p as { repositoryId: string };
