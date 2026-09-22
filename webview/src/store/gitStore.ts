@@ -37,6 +37,8 @@ export interface InputDialogState {
     confirmLabel?: string;
     /** Hide the text input and render a plain OK/Cancel confirmation. */
     confirmOnly?: boolean;
+    /** Renders a radio group (IDEA-style choice dialog) instead of a text input. */
+    options?: { value: string; label: string; description?: string }[];
     danger?: boolean;
     resolve: (value: string | null) => void;
 }
@@ -127,6 +129,7 @@ interface GitStore {
     cherryPick(hash: string): Promise<void>;
     revertCommit(hash: string): Promise<void>;
     resetTo(hash: string, mode: 'soft' | 'mixed' | 'hard'): Promise<void>;
+    undoCommit(hash: string, parentHash: string, subject: string): Promise<void>;
     checkoutRevision(hash: string): Promise<void>;
     createTag(name: string, hash?: string): Promise<void>;
 
@@ -647,6 +650,22 @@ export const useGitStore = create<GitStore>((set, get) => {
         async resetTo(hash, mode): Promise<void> {
             await withRepo({ hash, mode }, 'git.commit.reset').catch(handleError);
             await refreshAll();
+        },
+
+        async undoCommit(hash, parentHash, subject): Promise<void> {
+            void hash;
+            try {
+                // IDEA "Undo Commit": soft-reset to the parent so the changes
+                // stay staged, and restore the message into the commit box.
+                await withRepo({ hash: parentHash, mode: 'soft' }, 'git.commit.reset');
+                set({
+                    commitMessage: subject,
+                    toast: { kind: 'info', message: 'Commit undone. Changes kept staged; message restored to the commit box.' }
+                });
+                await refreshAll();
+            } catch (e) {
+                handleError(e);
+            }
         },
 
         async checkoutRevision(hash): Promise<void> {

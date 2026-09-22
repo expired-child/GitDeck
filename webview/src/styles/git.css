@@ -546,6 +546,10 @@ button.git-group-header:hover { background: var(--git-hover); }
     font-size: 12px;
 }
 .git-modal-input:focus { outline: 1px solid var(--git-focus-border, var(--git-button-bg)); outline-offset: -1px; }
+.git-modal-options { display: flex; flex-direction: column; gap: 6px; }
+.git-modal-option { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; }
+.git-modal-option input { margin: 0; }
+.git-modal-option-description { color: var(--git-description); font-size: 11px; }
 .git-secondary-button.danger { background: var(--git-deleted); color: #fff; border: none; }
 .git-empty-group { padding: 2px 12px 4px 28px; color: var(--git-description); font-size: 11px; font-style: italic; }
 .git-file-group { border: 1px solid transparent; border-radius: 3px; }

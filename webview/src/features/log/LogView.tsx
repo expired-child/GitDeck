@@ -28,11 +28,43 @@ function commitMenu(commit: CommitDto): Parameters<ReturnType<typeof useGitStore
         } },
         { separator: true },
         { label: 'Cherry-Pick', action: () => void store.cherryPick(commit.hash) },
+        {
+            label: 'Reset Current Branch to Here...',
+            action: () => {
+                // IDEA-style mode chooser (Soft / Mixed / Hard).
+                void store.showInputDialog({
+                    title: 'Reset Current Branch to Here',
+                    options: [
+                        { value: 'soft', label: 'Soft', description: 'Keep changes staged' },
+                        { value: 'mixed', label: 'Mixed', description: 'Keep changes in working tree' },
+                        { value: 'hard', label: 'Hard', description: 'Discard all uncommitted changes' }
+                    ],
+                    confirmLabel: 'Reset'
+                }).then(mode => {
+                    if (mode === 'soft' || mode === 'mixed' || mode === 'hard') {
+                        void store.resetTo(commit.hash, mode);
+                    }
+                });
+            }
+        },
         { label: 'Revert Commit', action: () => void store.revertCommit(commit.hash) },
-        { separator: true },
-        { label: 'Reset Current Branch to Here (Soft)', action: () => void store.resetTo(commit.hash, 'soft') },
-        { label: 'Reset Current Branch to Here (Mixed)', action: () => void store.resetTo(commit.hash, 'mixed') },
-        { label: 'Reset Current Branch to Here (Hard)', danger: true, action: () => void store.resetTo(commit.hash, 'hard') },
+        {
+            // IDEA: only the current branch tip can be undone.
+            label: 'Undo Commit...',
+            disabled: store.status?.head.commit !== commit.hash || commit.parents.length === 0,
+            danger: true,
+            action: () => {
+                const parent = commit.parents[0];
+                void store.showInputDialog({
+                    title: `Undo Commit "${commit.subject}"?`,
+                    confirmOnly: true,
+                    confirmLabel: 'Undo',
+                    danger: true
+                }).then(ok => {
+                    if (ok !== null) { void store.undoCommit(commit.hash, parent, commit.subject); }
+                });
+            }
+        },
         { separator: true },
         { label: 'Copy Revision Number', action: () => void navigator.clipboard.writeText(commit.hash) },
         { label: 'Copy Commit Message', action: () => void navigator.clipboard.writeText(commit.subject) }
