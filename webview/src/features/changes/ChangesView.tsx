@@ -21,7 +21,7 @@ function statusClass(status: ChangeStatusCode): string {
     }
 }
 
-function ChangeRow({ change }: { change: FileChangeDto }): JSX.Element {
+function ChangeRow({ change, groupPaths }: { change: FileChangeDto; groupPaths: string[] }): JSX.Element {
     const checked = useGitStore(s => s.checked[change.path] ?? false);
     const setChecked = useGitStore(s => s.setChecked);
     const openMenu = useGitStore(s => s.openMenu);
@@ -54,9 +54,10 @@ function ChangeRow({ change }: { change: FileChangeDto }): JSX.Element {
             className="git-file-row"
             draggable
             onDragStart={e => {
-                // Dragging a checked file moves every checked file, like IDEA.
-                const checkedPaths = Object.keys(checkedMap).filter(p => checkedMap[p]);
-                const paths = checkedPaths.includes(change.path) && checkedPaths.length > 0 ? checkedPaths : [change.path];
+                // Dragging a checked file moves every checked file in the same group, like IDEA.
+                const groupSet = new Set(groupPaths);
+                const checkedPaths = Object.keys(checkedMap).filter(p => checkedMap[p] && groupSet.has(p));
+                const paths = checkedPaths.includes(change.path) ? checkedPaths : [change.path];
                 e.dataTransfer.setData('application/gitdeck-paths', JSON.stringify(paths));
                 e.dataTransfer.effectAllowed = 'move';
             }}
@@ -133,6 +134,7 @@ function FileGroup({ title, changes, groupKey, headerMenu, renderWhenEmpty, onDr
     const [dragOver, setDragOver] = useState(false);
     const allChecked = changes.length > 0 && changes.every(change => checked[change.path]);
     const someChecked = changes.some(change => checked[change.path]);
+    const groupPaths = changes.map(change => change.path);
     if (changes.length === 0 && !renderWhenEmpty) {
         return null;
     }
@@ -179,7 +181,7 @@ function FileGroup({ title, changes, groupKey, headerMenu, renderWhenEmpty, onDr
             </div>
             {!collapsed && changes.length === 0 && <div className="git-empty-group">Changelist is empty</div>}
             {!collapsed && changes.map(change => (
-                <ChangeRow key={`${change.path}-${change.staged}`} change={change} />
+                <ChangeRow key={`${change.path}-${change.staged}`} change={change} groupPaths={groupPaths} />
             ))}
         </div>
     );
@@ -372,7 +374,7 @@ export function ChangesView(): JSX.Element {
             {hasConflicts && (
                 <FileGroup title="Merge Conflicts" changes={unassigned(status.conflicts)} groupKey="conflicts" headerMenu={defaultHeaderMenu} onDropPaths={paths => void unassignFromChangelist(paths)} />
             )}
-            <FileGroup title="Changes" changes={unassigned(status.changes)} groupKey="changes" headerMenu={defaultHeaderMenu} onDropPaths={paths => void unassignFromChangelist(paths)} />
+            <FileGroup title="Changes" changes={unassigned(status.changes)} groupKey="changes" headerMenu={defaultHeaderMenu} renderWhenEmpty onDropPaths={paths => void unassignFromChangelist(paths)} />
             {changelists.map(changelist => (
                 <FileGroup
                     key={changelist.name}
@@ -384,7 +386,7 @@ export function ChangesView(): JSX.Element {
                     onDropPaths={paths => void moveToChangelist(changelist.name, paths)}
                 />
             ))}
-            <FileGroup title="Unversioned Files" changes={unassigned(status.untracked)} groupKey="untracked" headerMenu={defaultHeaderMenu} onDropPaths={paths => void unassignFromChangelist(paths)} />
+            <FileGroup title="Unversioned Files" changes={unassigned(status.untracked)} groupKey="untracked" headerMenu={defaultHeaderMenu} renderWhenEmpty onDropPaths={paths => void unassignFromChangelist(paths)} />
             {allChanges.length === 0 && (
                 <div className="git-empty">No local changes.</div>
             )}

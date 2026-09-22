@@ -604,9 +604,13 @@ export const useGitStore = create<GitStore>((set, get) => {
         },
 
         async pushSelectedBranch(branch): Promise<void> {
-            await withRepo({ branch }, 'git.branch.push').catch(handleError);
-            set({ toast: { kind: 'info', message: `Branch "${branch}" pushed` } });
-            await get().loadBranches();
+            try {
+                await withRepo({ branch }, 'git.branch.push');
+                set({ toast: { kind: 'info', message: `Branch "${branch}" pushed` } });
+                await get().loadBranches();
+            } catch (e) {
+                handleError(e);
+            }
         },
 
         async diffBranchWithWorktree(branch): Promise<void> {

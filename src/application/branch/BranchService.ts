@@ -202,7 +202,12 @@ export class BranchService {
         await this.lock.run(repo.id, async () => {
             const upstream = await this.upstreamOf(repo.rootPath, branch);
             if (upstream) {
-                await this.cli.out(repo.rootPath, ['push'], { timeout: 120_000 });
+                // Push the *selected* branch explicitly; a bare `git push`
+                // would only push the currently checked-out branch.
+                const slash = upstream.indexOf('/');
+                const remote = slash > 0 ? upstream.slice(0, slash) : upstream;
+                const remoteBranch = slash > 0 ? upstream.slice(slash + 1) : branch;
+                await this.cli.out(repo.rootPath, ['push', remote, `${branch}:${remoteBranch}`], { timeout: 120_000 });
             } else {
                 const slash = branch.indexOf('/');
                 const remote = remotes.includes(branch.slice(0, slash)) ? branch.slice(0, slash) : remotes[0];

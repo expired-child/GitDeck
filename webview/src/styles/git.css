@@ -554,13 +554,14 @@ button.git-group-header:hover { background: var(--git-hover); }
 /* ---------- toast ---------- */
 .git-toast {
     position: fixed;
-    bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
+    top: 10px;
+    right: 10px;
+    max-width: calc(100% - 20px);
     padding: 6px 14px;
     border-radius: 3px;
     z-index: 120;
     font-size: 12px;
+    word-break: break-word;
 }
 .git-toast.info { background: var(--git-button-bg); color: var(--git-button-fg); }
 .git-toast.error { background: var(--git-deleted); color: #fff; }
