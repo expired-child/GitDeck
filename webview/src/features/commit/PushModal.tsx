@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useGitStore } from '../../store/gitStore';
 
 /**
@@ -6,7 +7,15 @@ import { useGitStore } from '../../store/gitStore';
 export function PushModal(): JSX.Element | null {
     const preview = useGitStore(s => s.pushPreview);
     const push = useGitStore(s => s.push);
+    const dialog = useRef<HTMLDivElement>(null);
     const set = (patch: { pushPreview?: undefined }) => useGitStore.setState(patch);
+
+    useEffect(() => {
+        if (!preview) { return; }
+        const previous = document.activeElement as HTMLElement | null;
+        dialog.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+        return () => { previous?.focus(); };
+    }, [preview]);
 
     if (!preview) {
         return null;
@@ -17,8 +26,19 @@ export function PushModal(): JSX.Element | null {
 
     return (
         <div className="git-modal-backdrop" onClick={() => set({ pushPreview: undefined })}>
-            <div className="git-modal" onClick={e => e.stopPropagation()}>
-                <div className="git-modal-title">
+            <div className="git-modal" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="git-push-title"
+                onClick={e => e.stopPropagation()}
+                onKeyDown={e => {
+                    if (e.key === 'Escape') { e.stopPropagation(); set({ pushPreview: undefined }); }
+                    if (e.key === 'Tab') {
+                        const buttons = dialog.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)');
+                        if (!buttons?.length) { return; }
+                        const first = buttons[0]; const last = buttons[buttons.length - 1];
+                        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+                        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+                    }
+                }}>
+                <div className="git-modal-title" id="git-push-title">
                     Push Commits — {preview.branch} → {preview.upstream ?? '(no upstream)'}
                 </div>
                 <div className="git-modal-body">

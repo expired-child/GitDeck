@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { request } from '../../bridge/vscode';
+import { ToolbarButton } from '../../components/Toolbar';
 import { useGitStore } from '../../store/gitStore';
 import type { MenuItem } from '../../store/gitStore';
 import type { BranchDto } from '../../bridge/protocol';
@@ -42,10 +45,14 @@ function branchContextMenu(branch: BranchDto): MenuItem[] {
 function BranchRow({ branch, indent }: { branch: BranchDto; indent: number }): JSX.Element {
     const openMenu = useGitStore(s => s.openMenu);
     const checkoutBranch = useGitStore(s => s.checkoutBranch);
+    const setFilter = useGitStore(s => s.setFilter);
+    const selected = useGitStore(s => s.filter.branches?.includes(branch.name) ?? false);
     const icon = branch.type === 'tag' ? 'tag' : branch.type === 'remote' ? 'cloud' : 'git-branch';
     return (
-        <div
-            className={`git-branch-row${branch.current ? ' current' : ''}`}
+        <button
+            className={`git-branch-row${branch.current ? ' current' : ''}${selected ? ' selected' : ''}`}
+            aria-pressed={selected}
+            onClick={() => setFilter({ branches: [branch.name] })}
             style={{ paddingLeft: indent }}
             title={branch.name}
             onDoubleClick={() => {
@@ -61,7 +68,7 @@ function BranchRow({ branch, indent }: { branch: BranchDto; indent: number }): J
             <i className={`codicon codicon-${icon}`} />
             <span className="git-branch-name">{branch.name}</span>
             {branch.current && <i className="codicon codicon-check" />}
-        </div>
+        </button>
     );
 }
 
@@ -78,10 +85,10 @@ function BranchGroup({ title, groupKey, branches, indent }: {
     }
     return (
         <div className="git-branch-group">
-            <div className="git-group-header" onClick={() => toggle(groupKey)}>
+            <button className="git-group-header" aria-expanded={!collapsed} onClick={() => toggle(groupKey)}>
                 <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} />
                 <span>{title}</span>
-            </div>
+            </button>
             {!collapsed && branches.map(b => (
                 <BranchRow key={b.name} branch={b} indent={indent} />
             ))}
@@ -95,15 +102,27 @@ function BranchGroup({ title, groupKey, branches, indent }: {
  */
 export function BranchesPanel(): JSX.Element {
     const branches = useGitStore(s => s.branches);
-    const locals = branches.filter(b => b.type === 'local');
-    const remotes = branches.filter(b => b.type === 'remote');
-    const tags = branches.filter(b => b.type === 'tag');
+    const [query, setQuery] = useState('');
+    const setFilter = useGitStore(s => s.setFilter);
+    const all = useGitStore(s => !s.filter.branches?.length);
+    const visible = branches.filter(b => b.name.toLowerCase().includes(query.toLowerCase()));
+    const locals = visible.filter(b => b.type === 'local');
+    const remotes = visible.filter(b => b.type === 'remote');
+    const tags = visible.filter(b => b.type === 'tag');
 
     return (
         <div className="git-branches">
-            <BranchGroup title="Local" groupKey="branches-local" branches={locals} indent={0} />
-            <BranchGroup title="Remote" groupKey="branches-remote" branches={remotes} indent={0} />
-            <BranchGroup title="Tags" groupKey="branches-tags" branches={tags} indent={0} />
+            <div className="git-branches-heading"><span className="git-section-title">Branches</span>
+                <ToolbarButton icon="add" title="New Branch" onClick={() => void request('git.branch.new').catch(e => useGitStore.getState().showToast('error', String(e)))} />
+            </div>
+            <input className="git-branch-search git-search-input" aria-label="Search branches" placeholder="Search branches" value={query} onChange={e => setQuery(e.target.value)} />
+            <button className={`git-branch-row${all ? ' selected' : ''}`} aria-pressed={all} onClick={() => setFilter({ branches: undefined })}>
+                <i className="codicon codicon-repo" /> All branches
+            </button>
+            <BranchGroup title="Local" groupKey="branches-local" branches={locals} indent={18} />
+            <BranchGroup title="Remote" groupKey="branches-remote" branches={remotes} indent={18} />
+            <BranchGroup title="Tags" groupKey="branches-tags" branches={tags} indent={18} />
+            {query && !visible.length && <div className="git-empty">No matching branches.</div>}
         </div>
     );
 }

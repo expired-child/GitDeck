@@ -30,7 +30,6 @@ function ChangeRow({ change }: { change: FileChangeDto }): JSX.Element {
     const ignoreFile = useGitStore(s => s.ignoreFile);
     const activeRepoId = useGitStore(s => s.activeRepoId);
     const setActiveTab = useGitStore(s => s.setActiveTab);
-    const loadHistory = useGitStore(s => s.loadHistory);
     const setHistoryPath = useGitStore(s => s.setHistoryPath);
 
     const diffTarget = (kind: 'worktree' | 'index' | 'untracked' | 'deleted') => ({
@@ -61,7 +60,7 @@ function ChangeRow({ change }: { change: FileChangeDto }): JSX.Element {
                         : { label: 'Add', action: () => void addFiles([change.path]) },
                     { label: 'Discard', danger: true, action: () => void discardFiles([change.path]) },
                     { separator: true },
-                    { label: 'Show History', action: () => { setHistoryPath(change.path); void loadHistory(change.path); setActiveTab('history'); } },
+                    { label: 'Show History', action: () => { setHistoryPath(change.path); setActiveTab('history'); } },
                     { label: 'Add to .gitignore', action: () => void ignoreFile(change.path) },
                     { label: 'Copy Relative Path', action: () => void navigator.clipboard.writeText(change.path) }
                 ]);
@@ -69,12 +68,15 @@ function ChangeRow({ change }: { change: FileChangeDto }): JSX.Element {
         >
             <input
                 type="checkbox"
+                aria-label={`Include ${change.path} in commit`}
                 checked={checked}
                 onClick={e => e.stopPropagation()}
                 onChange={e => setChecked(change.path, e.target.checked)}
             />
-            <span className={`git-file-path${checked ? '' : ' unchecked'}`}>
-                {change.originalPath ? `${change.originalPath} → ${change.path}` : change.path}
+            <i className="codicon codicon-file git-file-icon" aria-hidden="true" />
+            <span className={`git-file-path${checked ? '' : ' unchecked'}`} title={change.originalPath ? `${change.originalPath} → ${change.path}` : change.path}>
+                {change.path.split('/').pop()}
+                <span className="git-file-directory">{change.path.includes('/') ? change.path.slice(0, change.path.lastIndexOf('/')) : ''}</span>
             </span>
             <span className={`git-file-status ${statusClass(change.status)}`}>
                 {STATUS_LABEL[change.status]}
@@ -90,14 +92,23 @@ function FileGroup({ title, changes, groupKey }: {
 }): JSX.Element | null {
     const collapsed = useGitStore(s => s.collapsedGroups[groupKey] ?? false);
     const toggle = useGitStore(s => s.toggleGroup);
+    const checked = useGitStore(s => s.checked);
+    const setChecked = useGitStore(s => s.setChecked);
+    const allChecked = changes.every(change => checked[change.path]);
+    const someChecked = changes.some(change => checked[change.path]);
     if (changes.length === 0) {
         return null;
     }
     return (
         <div className="git-file-group">
-            <div className="git-group-header" onClick={() => toggle(groupKey)}>
-                <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} />
-                <span>{title} ({changes.length})</span>
+            <div className="git-group-header">
+                <button className="git-toolbar-button" aria-label={`${collapsed ? 'Expand' : 'Collapse'} ${title}`} aria-expanded={!collapsed} onClick={() => toggle(groupKey)}>
+                    <i className={`codicon codicon-chevron-${collapsed ? 'right' : 'down'}`} />
+                </button>
+                <input type="checkbox" aria-label={`Include all ${title}`} checked={allChecked}
+                    ref={el => { if (el) { el.indeterminate = someChecked && !allChecked; } }}
+                    onChange={e => changes.forEach(change => setChecked(change.path, e.target.checked))} />
+                <button className="git-toolbar-text-button" onClick={() => toggle(groupKey)}>{title} ({changes.length})</button>
             </div>
             {!collapsed && changes.map(change => (
                 <ChangeRow key={`${change.path}-${change.staged}`} change={change} />

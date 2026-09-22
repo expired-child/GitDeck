@@ -10,7 +10,7 @@ export function RepositorySelector(): JSX.Element | null {
     const select = useGitStore(s => s.selectRepository);
 
     if (repositories.length <= 1) {
-        return null;
+        return repositories[0] ? <span className="git-repository-name" title={repositories[0].rootPath}>{repositories[0].name}</span> : null;
     }
     return (
         <select

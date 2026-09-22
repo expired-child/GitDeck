@@ -9,13 +9,8 @@ import { HistoryView } from './features/history/HistoryView';
 import { PushModal } from './features/commit/PushModal';
 import { ContextMenu } from './components/ContextMenu';
 import { EmptyState } from './components/EmptyState';
-import type { TabId } from './store/gitStore';
-
-const TABS: { id: TabId; label: string }[] = [
-    { id: 'changes', label: 'Local Changes' },
-    { id: 'log', label: 'Log' },
-    { id: 'history', label: 'History' }
-];
+import { ToolbarButton } from './components/Toolbar';
+import { request } from './bridge/vscode';
 
 function Toast(): JSX.Element | null {
     const toast = useGitStore(s => s.toast);
@@ -39,6 +34,8 @@ export default function App(): JSX.Element {
     const status = useGitStore(s => s.status);
     const openPushPreview = useGitStore(s => s.openPushPreview);
     const initRepository = useGitStore(s => s.initRepository);
+    const historyPath = useGitStore(s => s.historyPath);
+    const isCommit = document.body.dataset.surface !== 'log';
 
     useEffect(() => {
         void useGitStore.getState().boot();
@@ -62,41 +59,31 @@ export default function App(): JSX.Element {
     }
 
     return (
-        <div className="git-root">
+        <div className={`git-root git-surface-${isCommit ? 'commit' : 'log'}`}>
             <div className="git-header">
                 <RepositorySelector />
                 {status?.head.branch && (
-                    <span className="git-header-branch" title="Current branch">
+                    <button className="git-header-branch git-toolbar-text-button" title="Branches — checkout or create branch"
+                        onClick={() => void request('git.branch.pick').catch(e => useGitStore.getState().showToast('error', String(e)))}>
                         <i className="codicon codicon-git-branch" /> {status.head.branch}
                         {status.head.ahead ? ` ↑${status.head.ahead}` : ''}
                         {status.head.behind ? ` ↓${status.head.behind}` : ''}
-                    </span>
+                        <i className="codicon codicon-chevron-down" />
+                    </button>
                 )}
                 <span className="git-toolbar-spacer" />
-                <button className="git-toolbar-text-button" title="Fetch" onClick={() => void useGitStore.getState().fetch(false)}>
-                    Fetch
-                </button>
-                <button className="git-toolbar-text-button" title="Pull" onClick={() => void useGitStore.getState().pull()}>
-                    Pull
-                </button>
-                <button className="git-toolbar-text-button" title="Push" onClick={() => void openPushPreview()}>
-                    Push
-                </button>
+                <ToolbarButton icon="cloud-download" title="Fetch — download remote refs" onClick={() => void useGitStore.getState().fetch(false)} />
+                <ToolbarButton icon="arrow-down" title="Pull — update local code" onClick={() => void useGitStore.getState().pull()} />
+                <ToolbarButton icon="arrow-up" title="Push commits" onClick={() => void openPushPreview()} />
+                <ToolbarButton icon={isCommit ? 'history' : 'git-commit'} title={isCommit ? 'Open Git Log (Alt+9)' : 'Open Commit (Alt+0)'}
+                    onClick={() => setActiveTab(isCommit ? 'log' : 'changes')} />
             </div>
-            <RemoteLogPanel />
-            <div className="git-tabs">
-                {TABS.map(tab => (
-                    <button
-                        key={tab.id}
-                        className={`git-tab${activeTab === tab.id ? ' active' : ''}`}
-                        onClick={() => setActiveTab(tab.id)}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
-            </div>
+            {!isCommit && <div className="git-tabs" role="tablist" aria-label="Git views">
+                <button role="tab" aria-selected={activeTab !== 'history'} className={`git-tab${activeTab !== 'history' ? ' active' : ''}`} onClick={() => setActiveTab('log')}>Log</button>
+                {historyPath && <button role="tab" aria-selected={activeTab === 'history'} className={`git-tab${activeTab === 'history' ? ' active' : ''}`} onClick={() => setActiveTab('history')}>History: {historyPath.split('/').pop()}</button>}
+            </div>}
             <div className="git-content">
-                {activeTab === 'changes' && (
+                {isCommit && (
                     <div className="git-changes-layout">
                         <div className="git-changes-scroll">
                             <ChangesView />
@@ -104,9 +91,10 @@ export default function App(): JSX.Element {
                         <CommitPanel />
                     </div>
                 )}
-                {activeTab === 'log' && <LogView />}
-                {activeTab === 'history' && <HistoryView />}
+                {!isCommit && activeTab !== 'history' && <LogView />}
+                {!isCommit && activeTab === 'history' && <HistoryView />}
             </div>
+            {!isCommit && <RemoteLogPanel />}
             <PushModal />
             <ContextMenu />
             <Toast />

@@ -51,6 +51,8 @@ export function registerViews(
     const cliOps = new CliOps(services);
 
     router.onStateSave(state => stateBridge.save(state));
+    router.register('git.branch.pick', async () => vscode.commands.executeCommand('ideaGit.branchPicker'));
+    router.register('git.branch.new', async () => vscode.commands.executeCommand('ideaGit.newBranch'));
 
     router.register('git.repositories.get', async () => {
         await services.repositories.initialize();
@@ -254,6 +256,11 @@ export function registerViews(
         { dispose: () => { services.remotes.onLogUpdated = undefined; } },
         vscode.window.registerWebviewViewProvider(GitViewProvider.viewId, provider, {
             webviewOptions: { retainContextWhenHidden: true }
+        }),
+        vscode.window.registerWebviewViewProvider(GitViewProvider.logViewId, {
+            resolveWebviewView: view => provider.resolveSurface(view, 'log')
+        }, {
+            webviewOptions: { retainContextWhenHidden: true }
         })
     );
 
@@ -263,11 +270,11 @@ export function registerViews(
             provider.postEvent({ type: 'view.showTab', tab: 'changes' });
         },
         async openLog(): Promise<void> {
-            await provider.reveal();
+            await provider.reveal('log');
             provider.postEvent({ type: 'view.showTab', tab: 'log' });
         },
         async openHistory(relPath: string, repositoryId?: string): Promise<void> {
-            await provider.reveal();
+            await provider.reveal('history');
             provider.postEvent({
                 type: 'view.showTab',
                 tab: 'history',
@@ -280,6 +287,13 @@ export function registerViews(
             provider.postEvent({ type: 'repository.refresh', repositoryId: services.repositories.getActiveRepository()?.id ?? '' });
         }
     };
+
+    router.register('git.view.open', async p => {
+        const { tab, path: filePath } = p as { tab: 'changes' | 'log' | 'history'; path?: string };
+        if (tab === 'changes') { await notifier.openChanges(); }
+        else if (tab === 'history' && filePath) { await notifier.openHistory(filePath); }
+        else { await notifier.openLog(); }
+    });
 
     return { provider, notifier };
 }

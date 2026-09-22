@@ -19,7 +19,8 @@
   ],
   "activationEvents": [
     "workspaceContains:.git",
-    "onView:ideaGit.gitView"
+    "onView:ideaGit.gitView",
+    "onView:ideaGit.logView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -140,6 +141,10 @@
       {
         "command": "ideaGit.push",
         "key": "ctrl+alt+shift+k"
+      },
+      {
+        "command": "ideaGit.openCommit",
+        "key": "alt+0"
       }
     ],
     "submenus": [
@@ -176,7 +181,14 @@
       "activitybar": [
         {
           "id": "ideaGit",
-          "title": "IDEA Git",
+          "title": "Commit",
+          "icon": "media/icon.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "ideaGit-log",
+          "title": "Git",
           "icon": "media/icon.svg"
         }
       ]
@@ -186,7 +198,14 @@
         {
           "type": "webview",
           "id": "ideaGit.gitView",
-          "name": "Git"
+          "name": "Commit"
+        }
+      ],
+      "ideaGit-log": [
+        {
+          "type": "webview",
+          "id": "ideaGit.logView",
+          "name": "Git Log"
         }
       ]
     },

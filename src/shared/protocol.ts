@@ -166,6 +166,10 @@ export interface DiffTargetDto {
 // ---------------------------------------------------------------------------
 
 export type WebviewRequest =
+    | { type: 'webview.ready'; requestId: string }
+    | { type: 'git.view.open'; requestId: string; payload: { tab: 'changes' | 'log' | 'history'; path?: string } }
+    | { type: 'git.branch.pick'; requestId: string }
+    | { type: 'git.branch.new'; requestId: string }
     | { type: 'git.repositories.get'; requestId: string }
     | { type: 'git.repository.setActive'; requestId: string; payload: { repositoryId: string } }
     | { type: 'git.repo.init'; requestId: string }

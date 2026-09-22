@@ -16,11 +16,9 @@ export function RemoteLogPanel(): JSX.Element {
                     {loading ? '正在更新日志…' : '更新提交日志'}
                 </button>
                 <span className="git-remote-log-hint">仅更新日志，不修改代码</span>
-            </div>
-            <div role="status" className="git-remote-log-hint">
-                {result
-                    ? `${result.upstream} · ${result.behind} 条未合入本地 · 本地领先 ${result.ahead} 条 · 检查于 ${new Date(result.checkedAt).toLocaleTimeString()}`
-                    : status?.head.upstream ? '点击检查远端新提交；也会按设置定时检查。' : '当前分支未设置上游分支，设置后可检查远端提交。'}
+                <span className="git-remote-log-summary" role="status" title={result ? `检查于 ${new Date(result.checkedAt).toLocaleTimeString()}` : undefined}>
+                    {result ? `${result.upstream} ↓${result.behind} ↑${result.ahead}` : status?.head.upstream ? '尚未检查远端' : '未设置上游分支'}
+                </span>
             </div>
             {result && result.commits.length > 0 && (
                 <details>

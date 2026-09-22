@@ -12,14 +12,15 @@ export function CommitPanel(): JSX.Element | null {
     const setAmend = useGitStore(s => s.setAmend);
     const messageHistory = useGitStore(s => s.messageHistory);
     const commit = useGitStore(s => s.commit);
-    const openPushPreview = useGitStore(s => s.openPushPreview);
+    const commitBusy = useGitStore(s => s.commitBusy);
     const [historyOpen, setHistoryOpen] = useState(false);
 
     const hasSelection = useGitStore(s => Object.values(s.checked).some(Boolean));
     if (!status) {
         return null;
     }
-    const isBusy = status.state !== 'NORMAL';
+    const isBusy = status.state !== 'NORMAL' || commitBusy;
+    const canCommit = !isBusy && (hasSelection || amend) && Boolean(commitMessage.trim());
 
     return (
         <div className="git-commit-panel">
@@ -27,10 +28,11 @@ export function CommitPanel(): JSX.Element | null {
                 <textarea
                     className="git-commit-message"
                     placeholder="Commit message"
+                    aria-label="Commit message"
                     value={commitMessage}
                     onChange={e => setCommitMessage(e.target.value)}
                     onKeyDown={e => {
-                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !isBusy) {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && canCommit) {
                             void commit(false);
                         }
                     }}
@@ -71,18 +73,18 @@ export function CommitPanel(): JSX.Element | null {
             <div className="git-commit-buttons">
                 <button
                     className="git-primary-button"
-                    disabled={isBusy || (!hasSelection && !amend)}
+                    disabled={!canCommit}
                     onClick={() => void commit(false)}
                 >
-                    Commit
+                    {commitBusy ? 'Committing…' : 'Commit'}
                 </button>
                 <button
                     className="git-secondary-button"
-                    disabled={isBusy || (!hasSelection && !amend)}
-                    onClick={() => void openPushPreview()}
+                    disabled={!canCommit}
+                    onClick={() => void commit(true)}
                     title="Commit, then review and push"
                 >
-                    Commit &amp; Push <i className="codicon codicon-chevron-down" />
+                    Commit &amp; Push…
                 </button>
             </div>
         </div>

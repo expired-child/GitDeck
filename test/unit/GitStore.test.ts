@@ -47,3 +47,52 @@ describe('webview refresh races', () => {
         expect(useGitStore.getState().commits).toEqual([]);
     });
 });
+
+describe('Commit and Push workflow', () => {
+    const status = { repositoryId: 'repo', head: {}, state: 'NORMAL' as const, changes: [{ path: 'file.ts', status: 'M' as const, staged: false }],
+        untracked: [], conflicts: [], staged: [], remotes: [], rebaseProgress: null };
+
+    it('commits selected files before previewing, without pushing or committing twice', async () => {
+        const { useGitStore } = await import('../../webview/src/store/gitStore');
+        useGitStore.setState({ activeRepoId: 'repo', status, commitMessage: 'Fix layout', checked: { 'file.ts': true } });
+        const saving = deferred<void>();
+        bridge.request.mockImplementation(async type => {
+            if (type === 'git.commit') { return saving.promise; }
+            if (type === 'git.status.get') { return { ...status, changes: [] }; }
+            if (type === 'git.log.load') { return { commits: [], hasMore: false }; }
+            if (type === 'git.remote.pushPreview') { return { repositoryId: 'repo', branch: 'main', upstream: 'origin/main', commits: [{ hash: 'new' }] }; }
+            return [];
+        });
+        const operation = useGitStore.getState().commit(true);
+        await useGitStore.getState().commit(true);
+        expect(bridge.request.mock.calls.map(([type]) => type)).toEqual(['git.commit']);
+        saving.resolve(); await operation;
+        const types = bridge.request.mock.calls.map(([type]) => type);
+        expect(types.filter(type => type === 'git.commit')).toHaveLength(1);
+        expect(types).toContain('git.remote.pushPreview');
+        expect(types).not.toContain('git.remote.push');
+        expect(useGitStore.getState().pushPreview?.commits[0].hash).toBe('new');
+        expect(useGitStore.getState().commitMessage).toBe('');
+        expect(useGitStore.getState().commitBusy).toBe(false);
+    });
+
+    it('keeps the draft and never opens push when commit fails', async () => {
+        const { useGitStore } = await import('../../webview/src/store/gitStore');
+        useGitStore.setState({ activeRepoId: 'repo', status, commitMessage: 'Keep this draft', checked: { 'file.ts': true } });
+        bridge.request.mockRejectedValue(new Error('commit hook failed'));
+        await useGitStore.getState().commit(true);
+        expect(bridge.request.mock.calls.map(([type]) => type)).toEqual(['git.commit']);
+        expect(useGitStore.getState().commitMessage).toBe('Keep this draft');
+        expect(useGitStore.getState().pushPreview).toBeUndefined();
+        expect(useGitStore.getState().commitBusy).toBe(false);
+    });
+
+    it('ordinary Push previews existing commits even when files and a draft are selected', async () => {
+        const { useGitStore } = await import('../../webview/src/store/gitStore');
+        useGitStore.setState({ activeRepoId: 'repo', status, commitMessage: 'Unfinished', checked: { 'file.ts': true } });
+        bridge.request.mockResolvedValue({ commits: [] });
+        await useGitStore.getState().openPushPreview();
+        expect(bridge.request.mock.calls.map(([type]) => type)).toEqual(['git.remote.pushPreview']);
+        expect(useGitStore.getState().commitMessage).toBe('Unfinished');
+    });
+});

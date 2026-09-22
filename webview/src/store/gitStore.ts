@@ -30,6 +30,7 @@ interface GitStore {
     activeRepoId?: string;
     status?: RepositoryStatusDto;
     statusLoading: boolean;
+    commitBusy: boolean;
     remoteLog?: RemoteLogDto;
     remoteLogLoading: boolean;
     updateRemoteLog(): Promise<void>;
@@ -175,12 +176,13 @@ export const useGitStore = create<GitStore>((set, get) => {
         activeRepoId: undefined,
         status: undefined,
         statusLoading: false,
+        commitBusy: false,
         remoteLogLoading: false,
         checked: {},
         commitMessage: '',
         amend: false,
         messageHistory: [],
-        activeTab: 'changes',
+        activeTab: typeof document !== 'undefined' && document.body.dataset.surface === 'log' ? 'log' : 'changes',
         commits: [],
         logPage: 0,
         hasMore: false,
@@ -196,7 +198,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         stashes: [],
         toast: undefined,
         menu: null,
-        splitSizes: [22, 50, 28],
+        splitSizes: [18, 54, 28],
         collapsedGroups: {},
         showGraph: true,
 
@@ -264,6 +266,17 @@ export const useGitStore = create<GitStore>((set, get) => {
                 await Promise.all([get().refreshStatus(), get().loadBranches(), get().loadCommits(true)]);
                 const history = await request<string[]>('git.commit.getMessageHistory');
                 set({ messageHistory: history });
+            } catch (e) {
+                handleError(e);
+            }
+            // Navigation must remain usable even when the first repository read fails.
+            try {
+                const persisted = await request<WebviewPersistedState>('webview.ready');
+                const sizes = persisted?.splitPaneSizes;
+                if (sizes?.length === 3 && sizes.every(n => Number.isFinite(n) && n >= 8)
+                    && Math.abs(sizes.reduce((a, b) => a + b, 0) - 100) < 1) {
+                    set({ splitSizes: sizes });
+                }
             } catch (e) {
                 handleError(e);
             }
@@ -369,6 +382,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         },
 
         async commit(pushAfter): Promise<void> {
+            if (get().commitBusy) { return; }
             const { commitMessage, amend, checked, status } = get();
             const selectedPaths = Object.entries(checked)
                 .filter(([, v]) => v)
@@ -378,6 +392,8 @@ export const useGitStore = create<GitStore>((set, get) => {
                 ...(status?.untracked ?? [])
             ].map(c => c.path));
             const paths = selectedPaths.filter(p => known.has(p));
+            if (!commitMessage.trim() || (!paths.length && !amend) || status?.state !== 'NORMAL') { return; }
+            set({ commitBusy: true });
             try {
                 await withRepo({ message: commitMessage, paths, amend }, 'git.commit');
                 set({ commitMessage: '', amend: false });
@@ -385,14 +401,21 @@ export const useGitStore = create<GitStore>((set, get) => {
                 set({ messageHistory: history, toast: { kind: 'info', message: 'Commit successful' } });
                 await refreshAll();
                 if (pushAfter) {
-                    await get().push(false);
+                    await get().openPushPreview();
                 }
             } catch (e) {
                 handleError(e);
+            } finally {
+                set({ commitBusy: false });
             }
         },
 
         setActiveTab(tab): void {
+            const surface = typeof document !== 'undefined' ? document.body.dataset.surface : undefined;
+            if ((surface === 'commit' && tab !== 'changes') || (surface === 'log' && tab === 'changes')) {
+                void request('git.view.open', { tab, path: get().historyPath || undefined }).catch(handleError);
+                return;
+            }
             set({ activeTab: tab });
             get().persist({ activeTab: tab });
         },

@@ -18,6 +18,7 @@ function ChangedFiles(): JSX.Element {
     const showDiff = useGitStore(s => s.showDiff);
     const openMenu = useGitStore(s => s.openMenu);
     const activeRepoId = useGitStore(s => s.activeRepoId);
+    const details = useGitStore(s => s.selectedDetails);
 
     if (!selectedHash) {
         return <div className="git-details-section" />;
@@ -25,7 +26,7 @@ function ChangedFiles(): JSX.Element {
     return (
         <div className="git-details-section">
             <div className="git-section-title">Changed Files ({files.length})</div>
-            {files.length === 0 && <div className="git-empty">Loading…</div>}
+            {files.length === 0 && <div className="git-empty">{details ? 'No changed files.' : 'Loading…'}</div>}
             {files.map(file => (
                 <div
                     key={file.path}
@@ -121,6 +122,10 @@ function CommitDetails(): JSX.Element {
  * Right column of the Log view (document §18, §19): Changed Files + Details.
  */
 export function CommitDetailsPanel(): JSX.Element {
+    const selectedHash = useGitStore(s => s.selectedHash);
+    if (!selectedHash) {
+        return <div className="git-empty git-details-empty"><i className="codicon codicon-git-commit" /><span>Select a commit to view changed files and details.</span></div>;
+    }
     return (
         <div className="git-commit-details">
             <ChangedFiles />

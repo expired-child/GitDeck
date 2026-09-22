@@ -46,6 +46,10 @@ function CommitRow({ commit, index, layout }: { commit: CommitDto; index: number
     return (
         <div
             className={`git-commit-row${selectedHash === commit.hash ? ' selected' : ''}${index % 2 ? ' odd' : ''}`}
+            role="button"
+            tabIndex={0}
+            aria-pressed={selectedHash === commit.hash}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void selectCommit(commit.hash); } }}
             onClick={() => void selectCommit(commit.hash)}
             onContextMenu={e => {
                 e.preventDefault();
@@ -68,10 +72,11 @@ function CommitRow({ commit, index, layout }: { commit: CommitDto; index: number
                 ))}
             </span>
             <span className="git-commit-subject" title={commit.subject}>{commit.subject}</span>
-            <span className="git-commit-author">{commit.authorName}</span>
+            <span className="git-commit-author" title={commit.authorName}>{commit.authorName}</span>
             <span className="git-commit-date">
                 {formatDate(commit.date)}
             </span>
+            <span className="git-commit-hash mono">{commit.hash.slice(0, 7)}</span>
         </div>
     );
 }
@@ -107,33 +112,42 @@ export function LogView(): JSX.Element {
 
     return (
         <div className="git-log-view">
-            <Toolbar>
-                <ToolbarButton icon="refresh" title="Refresh" onClick={() => void refresh(true)} />
-                <input
-                    className="git-search-input"
-                    placeholder="Search commits..."
-                    value={filter.text ?? ''}
-                    onChange={e => setFilter({ text: e.target.value || undefined })}
-                />
-                <input
-                    className="git-filter-input"
-                    placeholder="Author"
-                    value={filter.authors?.[0] ?? ''}
-                    onChange={e => setFilter({ authors: e.target.value ? [e.target.value] : undefined })}
-                />
-                <input
-                    className="git-filter-input"
-                    placeholder="Path"
-                    value={filter.paths?.[0] ?? ''}
-                    onChange={e => setFilter({ paths: e.target.value ? [e.target.value] : undefined })}
-                />
-            </Toolbar>
-            {commits.length === 0 && !logLoading ? (
-                <div className="git-empty">No commits yet.</div>
-            ) : (
-                <SplitPane sizes={splitSizes} onResize={setSplitSizes}>
-                    <BranchesPanel />
-                    <div className="git-commits">
+            <SplitPane sizes={splitSizes} onResize={setSplitSizes}>
+                <BranchesPanel />
+                <div className="git-commits">
+                    <Toolbar>
+                        <ToolbarButton icon="refresh" title="Refresh" onClick={() => void refresh(true)} />
+                        <input
+                            className="git-search-input"
+                            placeholder="Search commits..."
+                            aria-label="Search commits"
+                            value={filter.text ?? ''}
+                            onChange={e => setFilter({ text: e.target.value || undefined })}
+                        />
+                        <input
+                            className="git-filter-input"
+                            placeholder="Author"
+                            aria-label="Filter by author"
+                            value={filter.authors?.[0] ?? ''}
+                            onChange={e => setFilter({ authors: e.target.value ? [e.target.value] : undefined })}
+                        />
+                        <input
+                            className="git-filter-input"
+                            placeholder="Path"
+                            aria-label="Filter by path"
+                            value={filter.paths?.[0] ?? ''}
+                            onChange={e => setFilter({ paths: e.target.value ? [e.target.value] : undefined })}
+                        />
+                        <ToolbarButton icon="clear-all" title="Clear all filters" onClick={() => setFilter({ text: undefined, authors: undefined, paths: undefined, branches: undefined, after: undefined, before: undefined })} />
+                    </Toolbar>
+                    <div className="git-log-scope">
+                        <span title={filter.branches?.join(', ') ?? 'All branches'}>{filter.branches?.join(', ') ?? 'All branches'}</span>
+                        <span>{commits.length}{hasMore ? '+' : ''} commits</span>
+                    </div>
+                    <div className="git-log-columns" aria-hidden="true"><span>Graph / Commit message</span><span>Author</span><span>Date</span><span>Hash</span></div>
+                    {commits.length === 0 && !logLoading ? (
+                        <div className="git-empty">{Object.values(filter).some(Boolean) ? 'No commits match these filters.' : 'No commits yet.'}</div>
+                    ) : (
                         <VirtualList
                             itemCount={commits.length}
                             rowHeight={ROW_HEIGHT}
@@ -144,11 +158,11 @@ export function LogView(): JSX.Element {
                             }}
                             renderRow={i => <CommitRow commit={commits[i]} index={i} layout={layout} />}
                         />
-                        {logLoading && <div className="git-loading">Loading…</div>}
-                    </div>
-                    <CommitDetailsPanel />
-                </SplitPane>
-            )}
+                    )}
+                    {logLoading && <div className="git-loading" role="status">Loading…</div>}
+                </div>
+                <CommitDetailsPanel />
+            </SplitPane>
         </div>
     );
 }

@@ -3,13 +3,16 @@ import type { GitEvent, WebviewPersistedState, WebviewRequest } from '../../shar
 import type { WebviewMessageRouter } from './WebviewMessageRouter';
 
 /**
- * Hosts the React webview inside a sidebar view (document §9) and is the only
- * bridge for messages in both directions (document §41).
+ * Hosts Commit in the sidebar and Git Log in the bottom panel. Repository
+ * events reach both surfaces; navigation waits for the destination to boot.
  */
 export class GitViewProvider implements vscode.WebviewViewProvider {
     static readonly viewId = 'ideaGit.gitView';
 
-    private view?: vscode.WebviewView;
+    static readonly logViewId = 'ideaGit.logView';
+    private readonly views = new Map<string, vscode.WebviewView>();
+    private readonly ready = new Set<string>();
+    private readonly pending = new Map<string, Extract<GitEvent, { type: 'view.showTab' }>>();
 
     constructor(
         private readonly extensionUri: vscode.Uri,
@@ -18,37 +21,61 @@ export class GitViewProvider implements vscode.WebviewViewProvider {
     ) {}
 
     resolveWebviewView(view: vscode.WebviewView): void {
-        this.view = view;
+        this.resolveSurface(view, 'commit');
+    }
+
+    resolveSurface(view: vscode.WebviewView, surface: 'commit' | 'log'): void {
+        const id = surface === 'commit' ? GitViewProvider.viewId : GitViewProvider.logViewId;
+        this.views.set(id, view);
+        this.ready.delete(id);
         view.webview.options = {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.joinPath(this.extensionUri, 'media', 'webview')]
         };
-        view.webview.html = this.buildHtml(view.webview);
+        view.webview.html = this.buildHtml(view.webview, surface);
 
         view.webview.onDidReceiveMessage((message: WebviewRequest) => {
+            if (message.type === 'webview.ready') {
+                this.ready.add(id);
+                void view.webview.postMessage({ requestId: message.requestId, success: true, data: this.loadPersistedState() });
+                const navigation = this.pending.get(id);
+                if (navigation) {
+                    this.pending.delete(id);
+                    void view.webview.postMessage(navigation);
+                }
+                return;
+            }
             void this.router.handle(message, response => {
                 void view.webview.postMessage(response);
             });
         });
+        view.onDidDispose(() => {
+            if (this.views.get(id) === view) {
+                this.views.delete(id);
+                this.ready.delete(id);
+            }
+        });
     }
 
     postEvent(event: GitEvent): void {
-        void this.view?.webview.postMessage(event);
+        if (event.type === 'view.showTab') {
+            const id = event.tab === 'changes' ? GitViewProvider.viewId : GitViewProvider.logViewId;
+            if (this.ready.has(id)) { void this.views.get(id)?.webview.postMessage(event); }
+            else { this.pending.set(id, event); }
+            return;
+        }
+        for (const view of this.views.values()) { void view.webview.postMessage(event); }
     }
 
     isVisible(): boolean {
-        return this.view?.visible ?? false;
+        return [...this.views.values()].some(view => view.visible);
     }
 
-    async reveal(): Promise<void> {
-        if (this.view) {
-            await vscode.commands.executeCommand('ideaGit.gitView.focus');
-        } else {
-            await vscode.commands.executeCommand(GitViewProvider.viewId + '.focus');
-        }
+    async reveal(tab: 'changes' | 'log' | 'history' = 'changes'): Promise<void> {
+        await vscode.commands.executeCommand((tab === 'changes' ? GitViewProvider.viewId : GitViewProvider.logViewId) + '.focus');
     }
 
-    private buildHtml(webview: vscode.Webview): string {
+    private buildHtml(webview: vscode.Webview, surface: 'commit' | 'log'): string {
         const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'webview', 'assets', 'git.js'));
         const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'webview', 'assets', 'git.css'));
         const nonce = getNonce();
@@ -62,7 +89,7 @@ export class GitViewProvider implements vscode.WebviewViewProvider {
     <title>IDEA Git</title>
     <link rel="stylesheet" href="${cssUri}">
 </head>
-<body>
+<body data-surface="${surface}">
     <div id="root"></div>
     <script nonce="${nonce}" src="${jsUri}"></script>
 </body>

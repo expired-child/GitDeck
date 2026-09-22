@@ -14,9 +14,10 @@ export function ToolbarButton({ icon, title, onClick, active }: {
         <button
             className={`git-toolbar-button${active ? ' active' : ''}`}
             title={title}
+            aria-label={title}
             onClick={onClick}
         >
-            <i className={`codicon codicon-${icon}`} />
+            <i className={`codicon codicon-${icon}`} aria-hidden="true" />
         </button>
     );
 }

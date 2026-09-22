@@ -2,6 +2,19 @@
 
 在 VS Code 中复刻 IntelliJ IDEA Git 工作流的插件：**Local Changes、Commit、Git Log（Commit Graph）、Branches、History、Push/Pull/Fetch** 全流程覆盖，深度复用 `vscode.git` 与 VS Code 原生 Diff / Merge Editor 能力。
 
+## 窗口布局与核心工作流
+
+- **左侧 Commit（`Alt+0`）**：上方仓库和分支入口，中间 Changes / Unversioned Files 分组与勾选，下方提交说明、Amend、Commit / Commit & Push。点击文件在编辑区打开原生 Diff。
+- **底部 Git（`Alt+9`）**：左侧可搜索的分支树，中间提交图与日志（说明、作者、日期、Hash），右侧上方 Changed Files、下方 Commit Details。分栏可拖动，也可聚焦分隔线后用左右方向键调整，比例会保存。
+- 单击分支筛选日志，双击分支 Checkout；`All branches` 恢复全部分支。筛选无结果时仍可切换分支或清除筛选。
+- 文件 History 按需在底部打开；Commit 和 Log 的仓库、分支、文件状态一起刷新，提交说明留在 Commit 窗口。
+- `Commit & Push` 先提交成功，再展示待推送提交供确认；顶部 Push 只推送已有提交。
+- “更新提交日志”收在底部状态区，仍只更新远端引用，不修改本地代码。
+
+本轮重点实现上述 IDEA 式主要工作流，未实现 IDEA 的 Shelf、自定义 Changelists、部分代码块提交或完整设置体系。VS Code 的工具窗口边框、停靠和 Diff 编辑器由宿主提供，颜色跟随当前 VS Code 主题。
+
+开发调试请运行 `npm run build` 后重新启动 Extension Development Host；已安装插件需重新打包安装后 Reload Window。升级保留原侧栏视图 ID，新 Git Log 使用独立底部视图；若以前手动移动过窗口，可在视图菜单中重置位置。
+
 ## 功能列表
 
 ### Repository
@@ -68,6 +81,7 @@
 | 快捷键 | 命令 |
 | --- | --- |
 | `Alt+9` | 打开 Git Log |
+| `Alt+0` | 打开 Commit |
 | `Ctrl+Alt+C` | 打开 Commit |
 | `Ctrl+Alt+Shift+K` | Push |
 
