@@ -14,9 +14,6 @@
     "SCM Providers",
     "Other"
   ],
-  "extensionDependencies": [
-    "vscode.git"
-  ],
   "activationEvents": [
     "workspaceContains:.git",
     "onView:ideaGit.gitView",
@@ -127,6 +124,16 @@
         "title": "更新远端提交日志（不修改代码）",
         "category": "IDEA Git",
         "icon": "$(cloud-download)"
+      },
+      {
+        "command": "ideaGit.setAiApiKey",
+        "title": "设置 AI API Key",
+        "category": "IDEA Git"
+      },
+      {
+        "command": "ideaGit.clearAiApiKey",
+        "title": "清除 AI API Key",
+        "category": "IDEA Git"
       }
     ],
     "keybindings": [
@@ -219,8 +226,13 @@
             "log",
             "history"
           ],
+          "enumDescriptions": [
+            "打开时显示本地改动与提交面板",
+            "打开时显示 Git Log 提交图",
+            "打开时显示文件历史"
+          ],
           "default": "changes",
-          "description": "Default active view when the Git panel opens."
+          "description": "打开 Git 面板时默认显示的视图。"
         },
         "ideaGit.commitMode": {
           "type": "string",
@@ -228,8 +240,12 @@
             "simple",
             "staging"
           ],
+          "enumDescriptions": [
+            "IDEA 风格：勾选框选择本次要提交的文件",
+            "显式暂存 / 取消暂存文件"
+          ],
           "default": "simple",
-          "description": "Commit mode: simple (checkbox selection, IDEA style) or staging (explicit stage/unstage)."
+          "description": "提交模式：simple 为勾选框选择文件，staging 为显式暂存与取消暂存。"
         },
         "ideaGit.log.pageSize": {
           "type": "number",
@@ -239,24 +255,24 @@
             500
           ],
           "default": 200,
-          "description": "Number of commits loaded per page in the Git Log."
+          "description": "Git Log 每次分页加载的提交数量。"
         },
         "ideaGit.log.showGraph": {
           "type": "boolean",
           "default": true,
-          "description": "Show the commit graph in the Git Log."
+          "description": "在 Git Log 中显示提交图。"
         },
         "ideaGit.log.showRemoteBranches": {
           "type": "boolean",
           "default": true,
-          "description": "Include remote branches in the Git Log."
+          "description": "Git Log 中是否包含远程分支。"
         },
         "ideaGit.commitMessageHistorySize": {
           "type": "number",
           "default": 20,
           "minimum": 1,
           "maximum": 100,
-          "description": "Number of recent commit messages kept in history."
+          "description": "保留的最近提交信息条数。"
         },
         "ideaGit.pullMode": {
           "type": "string",
@@ -264,29 +280,73 @@
             "merge",
             "rebase"
           ],
+          "enumDescriptions": [
+            "合并远端改动，会产生合并提交",
+            "把本地提交变基到远端之上，保持线性历史"
+          ],
           "default": "merge",
-          "description": "Default pull strategy."
+          "description": "默认的 Pull 策略。"
         },
         "ideaGit.confirm.discardChanges": {
           "type": "boolean",
           "default": true,
-          "description": "Ask for confirmation before discarding changes."
+          "description": "丢弃改动前先确认。"
         },
         "ideaGit.confirm.forcePush": {
           "type": "boolean",
           "default": true,
-          "description": "Ask for confirmation before force pushing (always uses --force-with-lease)."
+          "description": "强制推送前先确认（始终使用 --force-with-lease）。"
         },
         "ideaGit.confirm.hardReset": {
           "type": "boolean",
           "default": true,
-          "description": "Ask for confirmation before a hard reset."
+          "description": "硬重置前先确认。"
         },
         "ideaGit.remoteLog.autoRefreshInterval": {
           "type": "number",
           "default": 180,
           "minimum": 0,
           "description": "检查当前分支远端提交的间隔（秒，最短 30 秒），0 关闭。仅在窗口获得焦点时获取提交信息，不拉取或合并代码。"
+        },
+        "ideaGit.log.autoRefreshInterval": {
+          "type": "number",
+          "default": 180,
+          "minimum": 0,
+          "description": "自动刷新 Git Log 的间隔（秒，最短 30 秒），0 关闭。每次会执行一次 git fetch，因此在本地就能看到其他人新推送的提交；仅在窗口获得焦点且 Git Log 界面可见时执行，不会合并或改动本地代码。"
+        },
+        "ideaGit.ai.baseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "AI 接口地址，需兼容 OpenAI 的 /chat/completions。DeepSeek 填 https://api.deepseek.com/v1，Ollama 填 http://localhost:11434/v1。"
+        },
+        "ideaGit.ai.model": {
+          "type": "string",
+          "default": "gpt-4o-mini",
+          "description": "AI 模型名，例如 gpt-4o-mini、deepseek-chat、qwen2.5-coder。"
+        },
+        "ideaGit.ai.temperature": {
+          "type": "number",
+          "default": 0.2,
+          "minimum": 0,
+          "maximum": 2,
+          "description": "生成提交信息时的采样温度，越低越稳定。"
+        },
+        "ideaGit.ai.maxDiffChars": {
+          "type": "number",
+          "default": 12000,
+          "minimum": 1000,
+          "description": "发送给 AI 的改动文本长度上限（字符），超出部分会被截断。"
+        },
+        "ideaGit.ai.prompt": {
+          "type": "string",
+          "editPresentation": "multilineText",
+          "default": "你是 Git 提交信息生成助手。根据用户提供的 git diff 生成一条提交信息，格式遵循阿里 Git 提交规约。\n\n提交信息结构（首行必需，body 与 footer 可选）：\n<type>(<scope>): <subject>\n\n<body>\n\n<footer>\n\n要求：\n1. type 只能取下列值，且必须小写：\n   feat：新增功能（面向用户的功能，不是构建脚本）\n   fix：修复缺陷（面向用户的缺陷，不是构建脚本）\n   docs：文档变更\n   style：代码格式改动（不影响代码运行，如缺少分号、缩进）\n   refactor：重构（既不是新增功能，也不是修复缺陷）\n   test：新增或修改测试用例\n   chore：构建过程或辅助工具的变动（不涉及生产代码）\n2. scope 说明影响范围（模块、组件或目录），可以为空；type 与 scope 一律小写。\n3. subject 用简体中文概括这次提交，使用一般现在时与祈使句，不加主语，句尾不加标点；首行总长度不超过 70 个字符。\n4. body 可选：一次改动包含多个方面时，用一行说明具体改了什么。\n5. footer 可选：只有关联 issue 时才按 \"Closes #123\" 的格式补充。\n6. 只输出提交信息本身，不要输出 diff、解释、前后缀或 Markdown 代码块。",
+          "description": "生成提交信息时发送给 AI 的提示词（system 消息）。默认按阿里 Git 提交规约编写：type(scope): subject，body 与 footer 可选，type 取 feat / fix / docs / style / refactor / test / chore。"
+        },
+        "ideaGit.ai.instructions": {
+          "type": "string",
+          "default": "",
+          "description": "在提示词之后追加的额外要求，例如必须带的需求号前缀；留空则只用提示词。"
         }
       }
     }

@@ -5,11 +5,13 @@ import type { ChangelistDto } from '../../shared/protocol';
  * Persistence on top of VS Code state storage:
  * - globalState: commit message history (document §11.4)
  * - workspaceState: active repository selection, webview state (document §89)
+ * - secrets: AI API key (never written to settings.json)
  */
 export class ExtensionStorage {
     private static readonly MESSAGE_HISTORY_KEY = 'ideaGit.commitMessageHistory';
     private static readonly ACTIVE_REPO_KEY = 'ideaGit.activeRepository';
     private static readonly CHANGELISTS_KEY = 'ideaGit.changelists';
+    private static readonly AI_API_KEY_SECRET = 'ideaGit.ai.apiKey';
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -57,5 +59,20 @@ export class ExtensionStorage {
             all[rootPath] = changelists;
         }
         await this.context.workspaceState.update(ExtensionStorage.CHANGELISTS_KEY, all);
+    }
+
+    /** AI API Key 存在系统凭据库，避免随 settings.json 同步或被提交进版本库。 */
+    async getAiApiKey(): Promise<string> {
+        return (await this.context.secrets.get(ExtensionStorage.AI_API_KEY_SECRET)) ?? '';
+    }
+
+    /** 传入空字符串表示清除已保存的 key。 */
+    async setAiApiKey(key: string): Promise<void> {
+        const trimmed = key.trim();
+        if (trimmed) {
+            await this.context.secrets.store(ExtensionStorage.AI_API_KEY_SECRET, trimmed);
+        } else {
+            await this.context.secrets.delete(ExtensionStorage.AI_API_KEY_SECRET);
+        }
     }
 }

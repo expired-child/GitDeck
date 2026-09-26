@@ -6,11 +6,13 @@ import type { RemoteService } from '../application/remote/RemoteService';
 import type { StashService } from '../application/stash/StashService';
 import type { FileHistoryService } from '../application/history/FileHistoryService';
 import type { GitWebviewNotifier } from '../presentation/commands/GitWebviewNotifier';
+import type { ExtensionStorage } from '../infrastructure/persistence/ExtensionStorage';
 import { registerCommitCommands } from '../presentation/commands/CommitCommands';
 import { registerBranchCommands } from '../presentation/commands/BranchCommands';
 import { registerLogCommands } from '../presentation/commands/LogCommands';
 import { registerRemoteCommands } from '../presentation/commands/RemoteCommands';
 import { registerHistoryCommands } from '../presentation/commands/HistoryCommands';
+import { registerAiCommands } from '../presentation/commands/AiCommands';
 
 export interface CommandServices {
     repositories: RepositoryManager;
@@ -21,6 +23,7 @@ export interface CommandServices {
     stashes: StashService;
     history: FileHistoryService;
     notifier: GitWebviewNotifier;
+    storage: ExtensionStorage;
     config(): { forcePushConfirm: boolean; pullMode: 'merge' | 'rebase'; discardConfirm: boolean };
 }
 
@@ -36,6 +39,7 @@ export function registerCommands(context: vscode.ExtensionContext, services: Com
     registerRemoteCommands(commands, services.repositories, services.remotes, services.stashes, services.config);
     const blameStore: { blameDecoration?: vscode.TextEditorDecorationType } = {};
     registerHistoryCommands(commands, services.repositories, services.history, services.notifier, blameStore);
+    registerAiCommands(commands, services.storage);
 
     for (const [id, handler] of Object.entries(commands)) {
         context.subscriptions.push(vscode.commands.registerCommand(id, handler));

@@ -14,9 +14,11 @@ import { RemoteService } from './application/remote/RemoteService';
 import { ConflictService } from './application/conflict/ConflictService';
 import { StashService } from './application/stash/StashService';
 import { ChangelistService } from './application/changelist/ChangelistService';
+import { CommitMessageService } from './application/ai/CommitMessageService';
 import { registerCommands } from './bootstrap/registerCommands';
 import { registerViews } from './bootstrap/registerViews';
 import { registerRemoteUpdates } from './bootstrap/registerRemoteUpdates';
+import { registerLogAutoRefresh } from './bootstrap/registerLogAutoRefresh';
 import { registerEvents } from './bootstrap/registerEvents';
 import { GitStatusBar } from './presentation/statusbar/GitStatusBar';
 
@@ -43,6 +45,7 @@ export function activate(context: vscode.ExtensionContext): void {
     const conflicts = new ConflictService(repositories, cli);
     const stashes = new StashService(repositories, cli);
     const changelists = new ChangelistService(repositories, storage);
+    const ai = new CommitMessageService(repositories, commits, storage);
 
     const statusBar = new GitStatusBar(repositories);
     context.subscriptions.push(statusBar, repositories);
@@ -56,16 +59,17 @@ export function activate(context: vscode.ExtensionContext): void {
     const { provider, notifier } = registerViews(context, {
         repositories, lock, status: statusService, commits, branches,
         log: logService, history, diff, remotes, conflicts, stashes, changelists,
-        storage, config
+        ai, storage, config
     });
 
     registerCommands(context, {
         repositories, lock, commits, branches, remotes, stashes, history,
-        notifier, config
+        notifier, storage, config
     });
 
     registerEvents(context, repositories, statusService, provider, statusBar);
     registerRemoteUpdates(context, repositories, remotes, lock, logger);
+    registerLogAutoRefresh(context, repositories, remotes, lock, provider, logger);
 
     // Async initialization: repository detection must not block activation
     // (document §67 — activation < 300ms).

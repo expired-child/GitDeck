@@ -37,7 +37,7 @@ export function request<T>(type: WebviewRequest['type'], payload?: unknown): Pro
     return new Promise<T>((resolve, reject) => {
         const timer = setTimeout(() => {
             if (pending.delete(requestId)) { reject(new Error(`Request timed out: ${type}`)); }
-        }, type.startsWith('git.remote.') ? 180_000 : 60_000);
+        }, type.startsWith('git.remote.') || type.startsWith('git.ai.') ? 180_000 : 60_000);
         pending.set(requestId, response => {
             clearTimeout(timer);
             if (response.success) {

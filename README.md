@@ -31,8 +31,11 @@
 - 状态徽标：M / A / D / R / C / U / ? / !
 
 ### Commit
+- 布局对齐 IDEA：Amend 行在输入框上方，历史与 AI 按钮收在该行，按钮行右侧为设置入口；面板顶部分隔条可向上拖动扩大输入框
 - Commit Message 输入 + 最近 20 条历史（可配置）
-- Amend（自动读取上一条 Commit Message）
+- Amend（自动读取上一条 Commit Message；仅 `--amend` 当前 HEAD，未实现选择其它提交）
+- AI 生成提交信息：用已勾选文件的改动（含未跟踪新文件内容）调用 OpenAI 兼容接口，生成简体中文提交信息；未勾选任何文件时按工作区全部改动处理
+- 提交信息遵循阿里 Git 提交规约（约定式提交）：`type(scope): subject`，body 与 footer 可选，type 取 `feat / fix / docs / style / refactor / test / chore`；整段提示词由 `ideaGit.ai.prompt` 提供默认值并可在设置里整体替换，`ideaGit.ai.instructions` 用于追加团队额外要求
 - Commit & Push（自动处理 upstream 关联）
 - 无 upstream 时 Push & Set Upstream
 
@@ -41,6 +44,8 @@
 - Commit Graph：拓扑正确的 lane 算法，Merge / 分叉可辨认，颜色稳定
 - 分页加载（默认每页 200，滚动到底自动加载）+ 虚拟列表渲染大仓库不卡顿
 - 筛选：搜索文本 / 作者 / 路径
+- 本地提交与云端提交区分：仅存在于本地分支、任何远端跟踪引用都不可达的提交，行背景色单独区分（`localOnly`）；仓库没有任何远端跟踪引用时不作区分
+- 自动刷新：`ideaGit.log.autoRefreshInterval`（默认 180 秒）定时 `git fetch` 后重新读取日志，别人新推送的提交无需手动刷新即可出现；仅在窗口获得焦点且 Git Log 界面可见时执行，只更新远端引用，不合并、不改动本地代码
 - 点击 Commit 联动 Changed Files 与 Commit Details
 - Commit 右键菜单：Checkout Revision / New Branch / New Tag / Cherry-Pick / Revert / Reset Current Branch to Here（Soft / Mixed / Hard）/ Copy Hash / Copy Message
 
@@ -93,6 +98,8 @@
 
 新增命令：`IDEA Git: 更新远端提交日志（不修改代码）`，也可直接点击面板上方的“更新提交日志”。普通 Refresh 只重新读取本地状态；检查服务器上的新提交使用“更新提交日志”。
 
+AI 提交信息相关命令：`IDEA Git: 设置 AI API Key`、`IDEA Git: 清除 AI API Key`。API Key 存在 VS Code 密钥库（SecretStorage），不写入 `settings.json`，其余 AI 参数在设置里的 `ideaGit.ai.*` 下调整；提交面板右下角齿轮可直接跳到这些设置。首次点击输入框上方的 AI 图标时，若尚未配置 Key 会直接弹出输入框。
+
 ## 配置项
 
 | 配置 | 默认值 | 说明 |
@@ -105,6 +112,13 @@
 | `ideaGit.commitMessageHistorySize` | `20` | Commit Message 历史条数 |
 | `ideaGit.pullMode` | `merge` | Pull 策略（merge / rebase） |
 | `ideaGit.remoteLog.autoRefreshInterval` | `180` | 远端日志自动检查间隔（秒）；0 关闭，正数至少 30 秒 |
+| `ideaGit.log.autoRefreshInterval` | `180` | Git Log 自动刷新间隔（秒）；0 关闭，正数至少 30 秒。每次会执行一次 `git fetch` |
+| `ideaGit.ai.baseUrl` | `https://api.openai.com/v1` | AI 接口地址，需兼容 OpenAI 的 `/chat/completions`。DeepSeek 用 `https://api.deepseek.com/v1`，Ollama 用 `http://localhost:11434/v1` |
+| `ideaGit.ai.model` | `gpt-4o-mini` | AI 模型名，例如 `deepseek-chat` |
+| `ideaGit.ai.temperature` | `0.2` | 生成提交信息的采样温度 |
+| `ideaGit.ai.maxDiffChars` | `12000` | 发送给 AI 的改动文本长度上限（字符） |
+| `ideaGit.ai.prompt` | 阿里 Git 提交规约提示词 | 生成提交信息时发送给 AI 的 system 消息，可整体替换；清空则回退到内置默认值 |
+| `ideaGit.ai.instructions` | 空 | 在提示词之后追加的额外要求，例如必须带的需求号前缀 |
 | `ideaGit.confirm.discardChanges` | `true` | Discard 前确认 |
 | `ideaGit.confirm.forcePush` | `true` | Force Push 前确认 |
 | `ideaGit.confirm.hardReset` | `true` | Hard Reset 前确认 |

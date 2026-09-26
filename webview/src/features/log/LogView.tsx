@@ -79,10 +79,11 @@ function CommitRow({ commit, index, layout }: { commit: CommitDto; index: number
 
     return (
         <div
-            className={`git-commit-row${selectedHash === commit.hash ? ' selected' : ''}${index % 2 ? ' odd' : ''}`}
+            className={`git-commit-row${selectedHash === commit.hash ? ' selected' : ''}${index % 2 ? ' odd' : ''}${commit.localOnly ? ' local-only' : ''}`}
             role="button"
             tabIndex={0}
             aria-pressed={selectedHash === commit.hash}
+            title={commit.localOnly ? 'Local commit — not pushed to any remote yet' : undefined}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); void selectCommit(commit.hash); } }}
             onClick={() => void selectCommit(commit.hash)}
             onContextMenu={e => {

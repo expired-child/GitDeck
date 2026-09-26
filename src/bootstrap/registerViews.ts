@@ -7,6 +7,8 @@ import { GitViewProvider } from '../presentation/webview/GitViewProvider';
 import { WebviewStateBridge } from '../presentation/webview/WebviewStateBridge';
 import { NativeDiffController } from '../presentation/diff/NativeDiffController';
 import { discardChanges } from '../presentation/commands/CommitCommands';
+import { promptForAiApiKey } from '../presentation/commands/AiCommands';
+import { GitError, GitErrorCode } from '../shared/GitError';
 import type { GitWebviewNotifier } from '../presentation/commands/GitWebviewNotifier';
 import type { RepositoryManager } from '../application/repository/RepositoryService';
 import type { GitStatusService } from '../application/status/GitStatusService';
@@ -19,6 +21,7 @@ import type { RemoteService } from '../application/remote/RemoteService';
 import type { ConflictService } from '../application/conflict/ConflictService';
 import type { StashService } from '../application/stash/StashService';
 import type { ChangelistService } from '../application/changelist/ChangelistService';
+import type { CommitMessageService } from '../application/ai/CommitMessageService';
 import type { GitOperationLock } from '../application/repository/RepositoryService';
 import type { ExtensionStorage } from '../infrastructure/persistence/ExtensionStorage';
 
@@ -35,6 +38,7 @@ export interface ViewServices {
     conflicts: ConflictService;
     stashes: StashService;
     changelists: ChangelistService;
+    ai: CommitMessageService;
     storage: ExtensionStorage;
     config(): { discardConfirm: boolean };
 }
@@ -88,6 +92,16 @@ export function registerViews(
         return services.commits.getLastMessage(repositoryId);
     });
     router.register('git.commit.getMessageHistory', async () => services.commits.getMessageHistory());
+    router.register('git.ai.generateCommitMessage', async p => {
+        const { repositoryId, paths } = p as { repositoryId: string; paths: string[] };
+        if (!(await services.ai.hasApiKey()) && !(await promptForAiApiKey(services.storage))) {
+            throw new GitError(GitErrorCode.INVALID_INPUT, '尚未配置 AI API Key，已取消生成提交信息。');
+        }
+        return services.ai.generate(repositoryId, paths ?? []);
+    });
+    router.register('git.settings.open', async () => {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'ideaGit');
+    });
     router.register('git.commit.cherryPick', async p => {
         const { repositoryId, hash } = p as { repositoryId: string; hash: string };
         await services.commits.cherryPick(repositoryId, hash);

@@ -57,6 +57,8 @@ interface GitStore {
     commitMessage: string;
     amend: boolean;
     messageHistory: string[];
+    aiBusy: boolean;
+    generateCommitMessage(): Promise<void>;
     // log
     activeTab: TabId;
     commits: CommitDto[];
@@ -107,6 +109,7 @@ interface GitStore {
     setActiveTab(tab: TabId): void;
     setFilter(patch: Partial<GitLogFilterDto>): void;
     loadCommits(reset: boolean): Promise<void>;
+    refreshCommits(): Promise<void>;
     selectCommit(hash?: string): Promise<void>;
     loadCommitDetails(hash: string): Promise<void>;
 
@@ -173,6 +176,8 @@ export const useGitStore = create<GitStore>((set, get) => {
     let statusRevision = 0;
     let branchesRevision = 0;
     let logRevision = 0;
+    let commitsRefreshing = false;
+    let commitsRefreshPending = false;
     const applyStatus = (status: RepositoryStatusDto) => {
         if (get().activeRepoId !== status.repositoryId) { return; }
         const checked: Record<string, boolean> = {};
@@ -209,7 +214,7 @@ export const useGitStore = create<GitStore>((set, get) => {
     };
 
     const refreshAll = async (): Promise<void> => {
-        await Promise.all([get().refreshStatus(), get().loadBranches(), get().loadCommits(true), get().loadChangelists()]);
+        await Promise.all([get().refreshStatus(), get().loadBranches(), get().refreshCommits(), get().loadChangelists()]);
     };
 
     return {
@@ -223,6 +228,7 @@ export const useGitStore = create<GitStore>((set, get) => {
         commitMessage: '',
         amend: false,
         messageHistory: [],
+        aiBusy: false,
         activeTab: typeof document !== 'undefined' && document.body.dataset.surface === 'log' ? 'log' : 'changes',
         commits: [],
         logPage: 0,
@@ -271,7 +277,7 @@ export const useGitStore = create<GitStore>((set, get) => {
                         break;
                     case 'log.changed':
                         if (event.repositoryId === get().activeRepoId) {
-                            void get().loadCommits(true);
+                            void get().refreshCommits();
                             if (get().historyPath) { void get().loadHistory(get().historyPath); }
                         }
                         break;
@@ -416,6 +422,25 @@ export const useGitStore = create<GitStore>((set, get) => {
             set({ commitMessage: message });
         },
 
+        /**
+         * 用 AI 生成提交信息。只把已勾选的文件交给后端；一个都没勾选时
+         * 传空数组，由后端按“工作区全部改动”处理。
+         */
+        async generateCommitMessage(): Promise<void> {
+            const { activeRepoId, checked, aiBusy } = get();
+            if (!activeRepoId || aiBusy) { return; }
+            const paths = Object.entries(checked).filter(([, value]) => value).map(([path]) => path);
+            set({ aiBusy: true });
+            try {
+                const message = await request<string>('git.ai.generateCommitMessage', { repositoryId: activeRepoId, paths });
+                if (message.trim()) { set({ commitMessage: message.trim() }); }
+            } catch (e) {
+                handleError(e);
+            } finally {
+                set({ aiBusy: false });
+            }
+        },
+
         async setAmend(amend): Promise<void> {
             set({ amend });
             if (amend) {
@@ -514,6 +539,32 @@ export const useGitStore = create<GitStore>((set, get) => {
                 if (version !== logRevision || get().activeRepoId !== activeRepoId) { return; }
                 set({ logLoading: false });
                 handleError(e);
+            }
+        },
+
+        /**
+         * 重新读取日志，并保持用户已经翻到的页数。
+         * 定时刷新不该把列表截断回第一页，否则后台每跑一次就会丢掉滚动位置。
+         * 刷新期间再次触发会合并成一次补刷，避免请求被静默丢掉。
+         */
+        async refreshCommits(): Promise<void> {
+            if (commitsRefreshing) {
+                commitsRefreshPending = true;
+                return;
+            }
+            commitsRefreshing = true;
+            try {
+                do {
+                    commitsRefreshPending = false;
+                    const loadedPages = get().logPage;
+                    await get().loadCommits(true);
+                    for (let page = 1; page <= loadedPages; page++) {
+                        if (!get().hasMore) { break; }
+                        await get().loadCommits(false);
+                    }
+                } while (commitsRefreshPending);
+            } finally {
+                commitsRefreshing = false;
             }
         },
 

@@ -71,6 +71,12 @@ export class GitViewProvider implements vscode.WebviewViewProvider {
         return [...this.views.values()].some(view => view.visible);
     }
 
+    /** 指定界面的可见性：自动刷新只在对应界面真正可见时才做网络与计算开销。 */
+    isSurfaceVisible(surface: 'commit' | 'log'): boolean {
+        const id = surface === 'commit' ? GitViewProvider.viewId : GitViewProvider.logViewId;
+        return this.views.get(id)?.visible === true;
+    }
+
     async reveal(tab: 'changes' | 'log' | 'history' = 'changes'): Promise<void> {
         await vscode.commands.executeCommand((tab === 'changes' ? GitViewProvider.viewId : GitViewProvider.logViewId) + '.focus');
     }

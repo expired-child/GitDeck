@@ -33,4 +33,9 @@
     --git-graph-4: #e599f7;
     --git-graph-5: #66d9e8;
     --git-graph-6: #f783ac;
+
+    /* 本地未推送提交的行背景色：由主题色派生的半透明淡色底，
+       第一行是 color-mix 不可用时的回退，第二行在支持时按当前主题取色。 */
+    --git-local-only-bg: rgba(226, 192, 141, 0.16);
+    --git-local-only-bg: color-mix(in srgb, var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d) 16%, transparent);
 }

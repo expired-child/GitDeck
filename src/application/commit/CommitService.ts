@@ -101,16 +101,34 @@ export class CommitService {
     /**
      * Local changes as a patch (staged + unstaged, relative to HEAD).
      * Empty `paths` produces a patch for the whole working tree.
+     * `binary: false` 供 AI 场景使用：二进制块占满长度预算且没有语义价值。
      */
-    async getPatch(repositoryId: string, paths: string[]): Promise<string> {
+    async getPatch(repositoryId: string, paths: string[], options: { binary?: boolean } = {}): Promise<string> {
         const repo = this.repositories.getRequired(repositoryId);
         return this.lock.run(repo.id, async () => {
-            const args = ['diff', 'HEAD', '--binary', '--no-color'];
+            const args = ['diff', 'HEAD', '--no-color'];
+            if (options.binary !== false) {
+                args.push('--binary');
+            }
             if (paths.length > 0) {
                 args.push('--', ...paths);
             }
             return this.cli.out(repo.rootPath, args);
         });
+    }
+
+    /**
+     * 未跟踪（新）文件的仓库相对路径。新文件不在 `git diff HEAD` 里，
+     * 调用方需要单独读取内容，否则只选新文件时拿到的是空 diff。
+     */
+    async listUntrackedFiles(repositoryId: string, paths: string[]): Promise<string[]> {
+        const repo = this.repositories.getRequired(repositoryId);
+        const args = ['ls-files', '--others', '--exclude-standard'];
+        if (paths.length > 0) {
+            args.push('--', ...paths);
+        }
+        const out = await this.cli.out(repo.rootPath, args);
+        return out.split('\n').map(line => line.trim()).filter(Boolean);
     }
 
     /**

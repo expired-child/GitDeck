@@ -62,6 +62,8 @@ export interface CommitDto {
     date: string;
     refs: string[];
     subject: string;
+    /** 可达于本地分支但不可达于任何远端跟踪引用：即尚未推送到云端的提交。 */
+    localOnly?: boolean;
 }
 
 export interface CommitFileDto {
@@ -186,6 +188,8 @@ export type WebviewRequest =
     | { type: 'git.commit'; requestId: string; payload: CommitRequestDto }
     | { type: 'git.commit.getLastMessage'; requestId: string; payload: { repositoryId: string } }
     | { type: 'git.commit.getMessageHistory'; requestId: string }
+    | { type: 'git.ai.generateCommitMessage'; requestId: string; payload: { repositoryId: string; paths: string[] } }
+    | { type: 'git.settings.open'; requestId: string }
     | { type: 'git.commit.cherryPick'; requestId: string; payload: { repositoryId: string; hash: string } }
     | { type: 'git.commit.revert'; requestId: string; payload: { repositoryId: string; hash: string } }
     | { type: 'git.commit.reset'; requestId: string; payload: { repositoryId: string; hash: string; mode: 'soft' | 'mixed' | 'hard' } }

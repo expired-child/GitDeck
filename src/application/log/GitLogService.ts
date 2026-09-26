@@ -10,11 +10,22 @@ import { GitLogParser, LOG_FORMAT, LOG_WITH_BODY_FORMAT } from '../../infrastruc
 import type { RepositoryManager } from '../repository/RepositoryService';
 
 /**
+ * 未推送提交的采集上限。`rev-list` 按提交时间倒序输出，因此只保留最近的本地提交；
+ * 超过该数量级的仓库，更早的提交会按“已推送”处理（正常仓库远达不到）。
+ */
+const LOCAL_ONLY_LIMIT = 2000;
+
+/**
  * Git Log service (document §14, §16, §18, §19, §85).
  * Always paged — never loads the whole history (document §16).
  */
 export class GitLogService {
     private readonly parser = new GitLogParser();
+    /**
+     * 未推送提交集合按仓库缓存：翻页时复用，只有页 0（重新加载）才重新计算，
+     * 避免每次滚动加载都遍历一遍历史。
+     */
+    private readonly localOnlyCache = new Map<string, Set<string> | null>();
 
     constructor(
         private readonly repositories: RepositoryManager,
@@ -53,11 +64,42 @@ export class GitLogService {
         });
         const commits = this.parser.parseCommits(out);
         const hasMore = commits.length > pageSize;
+        const localOnly = await this.getLocalOnlyHashes(repo.rootPath, repo.id, request.page <= 0);
         return {
-            commits: hasMore ? commits.slice(0, pageSize).map(toCommitDto) : commits.map(toCommitDto),
+            commits: (hasMore ? commits.slice(0, pageSize) : commits).map(c => toCommitDto(c, localOnly)),
             hasMore,
             page: request.page
         };
+    }
+
+    /**
+     * 本地分支可达、但任何远端跟踪引用都不可达的提交集合，用于区分
+     * “已提交到本地”与“已推送到云端”。
+     *
+     * 返回 null 表示不做区分：仓库没有任何远端跟踪引用时无从比较，
+     * 此时若照常标记会把整个历史都染成“本地提交”。
+     */
+    private async getLocalOnlyHashes(root: string, repositoryId: string, recompute: boolean): Promise<Set<string> | null> {
+        if (!recompute && this.localOnlyCache.has(repositoryId)) {
+            return this.localOnlyCache.get(repositoryId) ?? null;
+        }
+        const hashes = await this.collectLocalOnly(root);
+        this.localOnlyCache.set(repositoryId, hashes);
+        return hashes;
+    }
+
+    private async collectLocalOnly(root: string): Promise<Set<string> | null> {
+        try {
+            const remoteRefs = await this.cli.out(root, ['for-each-ref', '--count=1', '--format=%(refname)', 'refs/remotes']);
+            if (!remoteRefs.trim()) { return null; }
+            const out = await this.cli.out(root, [
+                'rev-list', `--max-count=${LOCAL_ONLY_LIMIT}`, '--branches', '--not', '--remotes'
+            ]);
+            return new Set(out.split('\n').map(line => line.trim()).filter(Boolean));
+        } catch {
+            // 标记失败不能让日志本身失败，退化为不做区分。
+            return null;
+        }
     }
 
     async getCommit(repositoryId: string, hash: string): Promise<CommitDetailsDto> {
@@ -103,7 +145,7 @@ export class GitLogService {
             .flag('--max-count=200')
             .value(repo.getHead().upstream ? '@{u}..HEAD' : 'HEAD');
         const out = await this.cli.out(repo.rootPath, cmd.build());
-        return this.parser.parseCommits(out).map(toCommitDto);
+        return this.parser.parseCommits(out).map(c => toCommitDto(c));
     }
 
     private async getParentInfo(root: string, hash: string): Promise<{ parents: string[] }> {
@@ -129,7 +171,7 @@ export class GitLogService {
     }
 }
 
-function toCommitDto(c: Commit): CommitDto {
+function toCommitDto(c: Commit, localOnly?: Set<string> | null): CommitDto {
     return {
         hash: c.hash,
         parents: c.parents,
@@ -137,6 +179,7 @@ function toCommitDto(c: Commit): CommitDto {
         authorEmail: c.authorEmail,
         date: c.date,
         refs: c.refs,
-        subject: c.subject
+        subject: c.subject,
+        localOnly: localOnly ? localOnly.has(c.hash) : false
     };
 }

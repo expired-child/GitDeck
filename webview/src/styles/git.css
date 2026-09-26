@@ -244,38 +244,56 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--git-fo
 
 /* ---------- commit panel ---------- */
 .git-commit-panel {
-    border-top: 1px solid var(--git-border);
-    padding: 6px;
+    padding: 0 6px 6px;
     flex: none;
     display: flex;
     flex-direction: column;
     gap: 6px;
     background: var(--git-panel-bg);
 }
+/* 面板顶部的分隔条兼高度拖拽手柄：向上拖扩大输入框，同时顶替原来的 border-top。 */
+.git-commit-resizer {
+    height: 4px;
+    margin: 0 -6px;
+    flex: none;
+    cursor: row-resize;
+    background: var(--git-border);
+    touch-action: none;
+}
+.git-commit-resizer:hover { background: var(--git-focus); }
 .git-commit-message-wrap { position: relative; }
 .git-commit-message {
     width: 100%;
     min-height: 52px;
-    max-height: 120px;
-    resize: vertical;
+    resize: none;
     background: var(--git-input-bg);
     color: var(--git-input-fg);
     border: 1px solid var(--git-input-border);
     border-radius: 2px;
-    padding: 4px 26px 4px 6px;
+    padding: 4px 6px;
     font-family: inherit;
     font-size: inherit;
 }
 .git-commit-message:focus { outline: none; border-color: var(--git-focus); }
-.git-history-toggle {
-    position: absolute;
-    top: 4px;
-    right: 4px;
+/* Amend 行放在输入框上方，历史与 AI 按钮都收在这一行（对齐 IDEA 提交面板）。 */
+.git-commit-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+}
+.git-commit-icon-button {
     background: transparent;
     border: none;
     color: var(--git-description);
     cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 2px;
+    font-size: 14px;
+    line-height: 1;
 }
+.git-commit-icon-button:hover:not(:disabled) { color: var(--git-foreground); background: var(--git-hover); }
+.git-commit-icon-button:disabled { opacity: 0.6; cursor: default; }
 .git-message-history {
     position: absolute;
     bottom: 100%;
@@ -308,6 +326,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--git-fo
     gap: 6px;
     color: var(--git-description);
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .git-commit-buttons { display: flex; gap: 6px; }
@@ -358,6 +377,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 1px solid var(--git-fo
 .git-commit-row.selected { background: var(--git-selected); color: var(--git-selected-fg); }
 .git-commit-row.odd { background: rgba(128, 128, 128, 0.04); }
 .git-commit-row.odd.selected { background: var(--git-selected); }
+/* 尚未推送到远端的本地提交：与已推送到云端的提交用背景色区分（选中态优先级最高）。 */
+.git-commit-row.local-only { background: var(--git-local-only-bg); }
+.git-commit-row.local-only.selected { background: var(--git-selected); color: var(--git-selected-fg); }
 
 .git-commit-graph-cell { flex: none; display: flex; }
 .git-graph-line { fill: none; stroke-width: 2; }
